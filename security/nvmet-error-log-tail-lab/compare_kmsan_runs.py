@@ -12,6 +12,8 @@ RELEVANT = re.compile(
 
 
 def reports(path: Path) -> list[str]:
+    if not path.is_file():
+        return []
     text = path.read_text(errors="replace")
     return [
         chunk[:12000]
@@ -24,6 +26,8 @@ def relevant_report(path: Path) -> bool:
 
 
 def response_signal(path: Path) -> bool:
+    if not path.is_file():
+        return False
     text = path.read_text(errors="replace")
     return any(
         token in text
@@ -44,8 +48,15 @@ def main() -> int:
         print(f"usage: {sys.argv[0]} <unpatched.log> <patched.log>")
         return 64
 
-    original = summary(Path(sys.argv[1]))
-    fixed = summary(Path(sys.argv[2]))
+    original_path = Path(sys.argv[1])
+    fixed_path = Path(sys.argv[2])
+    missing = [str(path) for path in (original_path, fixed_path) if not path.is_file()]
+    if missing:
+        print(f"KMSAN_COMPARISON=INCOMPLETE_MISSING_LOGS: {', '.join(missing)}")
+        return 0
+
+    original = summary(original_path)
+    fixed = summary(fixed_path)
     print(f"UNPATCHED={original}")
     print(f"PATCHED={fixed}")
 
