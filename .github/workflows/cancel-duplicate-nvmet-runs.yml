@@ -1,0 +1,31 @@
+name: One-time cancel duplicate NVMe test runs
+
+on:
+  push:
+    branches:
+      - ci/nvmet-error-log-tail-lab
+    paths:
+      - '.github/workflows/cancel-duplicate-nvmet-runs.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel-duplicates:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Cancel older duplicate runs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          for run_id in 42459778196 42459778212; do
+            curl --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/KernelGhost-gif/udroid-download/actions/runs/$run_id/cancel"
+            echo "CANCEL_REQUESTED=$run_id"
+          done
