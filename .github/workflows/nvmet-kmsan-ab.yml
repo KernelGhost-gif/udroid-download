@@ -1,0 +1,121 @@
+name: NVMe-TCP Error Log KMSAN A-B
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci/nvmet-error-log-tail-lab
+    paths:
+      - 'security/nvmet-error-log-tail-lab/**'
+      - '.github/workflows/nvmet-kmsan-ab.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: udroid-nvmet-kmsan-ab-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  kmsan-ab:
+    name: Unpatched vs candidate-fixed KMSAN guest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Check out udroid-download harness
+        uses: actions/checkout@v4
+
+      - name: Validate scripts and probe
+        run: |
+          bash -n security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh
+          python3 -m py_compile \
+            security/nvmet-error-log-tail-lab/compare_kmsan_runs.py
+          gcc -std=c11 -O2 -Wall -Wextra -Werror \
+            security/nvmet-error-log-tail-lab/probe.c \
+            -o "$RUNNER_TEMP/nvmet-tail-probe"
+
+      - name: Check out full upstream Linux
+        uses: actions/checkout@v4
+        with:
+          repository: torvalds/linux
+          ref: master
+          path: linux
+          fetch-depth: 1
+
+      - name: Install Clang, kernel and QEMU dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            clang llvm lld flex bison bc libelf-dev libssl-dev dwarves \
+            qemu-system-x86 busybox-static cpio gcc python3
+
+      - name: Configure x86_64 KMSAN kernel with NVMe/TCP built in
+        run: |
+          make -C linux ARCH=x86_64 LLVM=1 x86_64_defconfig
+          linux/scripts/config --file linux/.config \
+            --enable DEBUG_KERNEL \
+            --enable KMSAN \
+            --enable KMSAN_CHECK_PARAM_RETVAL \
+            --enable MODULES \
+            --enable NVME_TARGET \
+            --enable NVME_TARGET_TCP \
+            --enable NVME_TCP \
+            --enable BLK_DEV_RAM \
+            --set-val BLK_DEV_RAM_SIZE 65536 \
+            --enable DEVTMPFS \
+            --enable DEVTMPFS_MOUNT \
+            --enable NET \
+            --enable INET \
+            --enable NETDEVICES \
+            --enable LOOPBACK \
+            --enable SERIAL_8250 \
+            --enable SERIAL_8250_CONSOLE
+          make -C linux ARCH=x86_64 LLVM=1 olddefconfig
+          grep -E '^(CONFIG_KMSAN|CONFIG_NVME_TARGET|CONFIG_NVME_TARGET_TCP|CONFIG_NVME_TCP|CONFIG_BLK_DEV_RAM)=' linux/.config
+          grep -q '^CONFIG_KMSAN=y$' linux/.config
+          grep -q '^CONFIG_NVME_TARGET=y$' linux/.config
+          grep -q '^CONFIG_NVME_TARGET_TCP=y$' linux/.config
+          grep -q '^CONFIG_NVME_TCP=y$' linux/.config
+
+      - name: Build pristine KMSAN kernel
+        run: |
+          make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
+
+      - name: Run unpatched KMSAN guest
+        run: |
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh \
+            linux/arch/x86/boot/bzImage \
+            "$RUNNER_TEMP/kmsan-unpatched.log"
+
+      - name: Apply candidate fix and rebuild KMSAN kernel
+        run: |
+          PATCH="$GITHUB_WORKSPACE/security/nvmet-error-log-tail-lab/candidate-fix.patch"
+          git -C linux apply --check --verbose "$PATCH"
+          git -C linux apply --verbose "$PATCH"
+          git -C linux diff --check
+          python3 security/nvmet-error-log-tail-lab/check_fixed_source.py linux
+          make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
+
+      - name: Run candidate-fixed KMSAN guest
+        run: |
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh \
+            linux/arch/x86/boot/bzImage \
+            "$RUNNER_TEMP/kmsan-patched.log"
+
+      - name: Compare unpatched and patched KMSAN results
+        if: always()
+        run: |
+          python3 security/nvmet-error-log-tail-lab/compare_kmsan_runs.py \
+            "$RUNNER_TEMP/kmsan-unpatched.log" \
+            "$RUNNER_TEMP/kmsan-patched.log"
+
+      - name: Upload KMSAN A-B logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmsan-unpatched-vs-fixed
+          path: |
+            ${{ runner.temp }}/kmsan-unpatched.log
+            ${{ runner.temp }}/kmsan-patched.log
+          if-no-files-found: ignore
+          retention-days: 7
