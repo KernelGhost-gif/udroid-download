@@ -23,7 +23,7 @@ rm -rf "$WORK"
 mkdir -p "$ROOT"/bin "$ROOT"/proc "$ROOT"/sys "$ROOT"/dev \
 	"$ROOT"/tmp "$ROOT"/run
 cp "$BUSYBOX" "$ROOT/bin/busybox"
-for applet in sh mount mkdir rmdir rm ln echo cat sleep poweroff dmesg grep ifconfig basename; do
+for applet in sh mount mkdir rmdir rm ln echo cat sleep poweroff dmesg grep ifconfig basename mknod; do
 	ln -s /bin/busybox "$ROOT/bin/$applet"
 done
 gcc -static -std=c11 -O2 -Wall -Wextra -Werror \
@@ -54,8 +54,14 @@ else
 	echo "KMSAN_ALLOC_INIT=ON_OR_UNKNOWN"
 fi
 
-if ! [ -c /dev/ram0 ]; then
-	echo "KMSAN_GUEST_ERROR=missing builtin brd namespace device"
+# BLK_DEV_RAM can be built in while its configured device count is zero.
+# Create minor 0 explicitly; brd supports on-demand instantiation from a devnode.
+if [ ! -b /dev/ram0 ]; then
+	mknod /dev/ram0 b 1 0
+fi
+if [ ! -b /dev/ram0 ]; then
+	echo "KMSAN_GUEST_ERROR=unable to create /dev/ram0 for built-in brd"
+	dmesg | tail -n 80
 	echo "KMSAN_GUEST_DONE"
 	poweroff -f
 fi
