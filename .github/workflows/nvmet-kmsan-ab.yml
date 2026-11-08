@@ -2,12 +2,6 @@ name: NVMe-TCP Error Log KMSAN A-B
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - ci/nvmet-error-log-tail-lab
-    paths:
-      - 'security/nvmet-error-log-tail-lab/**'
-      - '.github/workflows/nvmet-kmsan-ab.yml'
 
 permissions:
   contents: read
@@ -61,6 +55,7 @@ jobs:
             --enable NVME_TARGET_TCP \
             --enable NVME_TCP \
             --enable BLK_DEV_RAM \
+            --set-val BLK_DEV_RAM_COUNT 1 \
             --set-val BLK_DEV_RAM_SIZE 65536 \
             --enable DEVTMPFS \
             --enable DEVTMPFS_MOUNT \
@@ -75,7 +70,145 @@ jobs:
           grep -q '^CONFIG_KMSAN=y$' linux/.config
           grep -q '^CONFIG_NVME_TARGET=y$' linux/.config
           grep -q '^CONFIG_NVME_TARGET_TCP=y$' linux/.config
-          grep -q '^CONFIG_NVME_TCP=y$' linux/.config
+          grep -q '^CONFIG_NVME_TCP=y
+
+      - name: Build pristine KMSAN kernel
+        run: |
+          make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
+
+      - name: Run unpatched KMSAN guest
+        run: |
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh \
+            linux/arch/x86/boot/bzImage \
+            "$RUNNER_TEMP/kmsan-unpatched.log"
+
+      - name: Apply candidate fix and rebuild KMSAN kernel
+        run: |
+          PATCH="$GITHUB_WORKSPACE/security/nvmet-error-log-tail-lab/candidate-fix.patch"
+          git -C linux apply --check --verbose "$PATCH"
+          git -C linux apply --verbose "$PATCH"
+          git -C linux diff --check
+          python3 security/nvmet-error-log-tail-lab/check_fixed_source.py linux
+          make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
+
+      - name: Run candidate-fixed KMSAN guest
+        run: |
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh \
+            linux/arch/x86/boot/bzImage \
+            "$RUNNER_TEMP/kmsan-patched.log"
+
+      - name: Compare unpatched and patched KMSAN results
+        if: always()
+        run: |
+          if [[ -s "$RUNNER_TEMP/kmsan-unpatched.log" && -s "$RUNNER_TEMP/kmsan-patched.log" ]]; then
+            python3 security/nvmet-error-log-tail-lab/compare_kmsan_runs.py \
+              "$RUNNER_TEMP/kmsan-unpatched.log" \
+              "$RUNNER_TEMP/kmsan-patched.log"
+          else
+            echo "KMSAN_COMPARISON=INCOMPLETE (one or both guest logs are missing)"
+          fi
+
+      - name: Upload KMSAN A-B logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmsan-unpatched-vs-fixed
+          path: |
+            ${{ runner.temp }}/kmsan-unpatched.log
+            ${{ runner.temp }}/kmsan-patched.log
+          if-no-files-found: ignore
+          retention-days: 7
+ linux/.config
+          grep -q '^CONFIG_BLK_DEV_RAM=y
+
+      - name: Build pristine KMSAN kernel
+        run: |
+          make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
+
+      - name: Run unpatched KMSAN guest
+        run: |
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh \
+            linux/arch/x86/boot/bzImage \
+            "$RUNNER_TEMP/kmsan-unpatched.log"
+
+      - name: Apply candidate fix and rebuild KMSAN kernel
+        run: |
+          PATCH="$GITHUB_WORKSPACE/security/nvmet-error-log-tail-lab/candidate-fix.patch"
+          git -C linux apply --check --verbose "$PATCH"
+          git -C linux apply --verbose "$PATCH"
+          git -C linux diff --check
+          python3 security/nvmet-error-log-tail-lab/check_fixed_source.py linux
+          make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
+
+      - name: Run candidate-fixed KMSAN guest
+        run: |
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh \
+            linux/arch/x86/boot/bzImage \
+            "$RUNNER_TEMP/kmsan-patched.log"
+
+      - name: Compare unpatched and patched KMSAN results
+        if: always()
+        run: |
+          python3 security/nvmet-error-log-tail-lab/compare_kmsan_runs.py \
+            "$RUNNER_TEMP/kmsan-unpatched.log" \
+            "$RUNNER_TEMP/kmsan-patched.log"
+
+      - name: Upload KMSAN A-B logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmsan-unpatched-vs-fixed
+          path: |
+            ${{ runner.temp }}/kmsan-unpatched.log
+            ${{ runner.temp }}/kmsan-patched.log
+          if-no-files-found: ignore
+          retention-days: 7
+ linux/.config
+          grep -q '^CONFIG_BLK_DEV_RAM_COUNT=1
+
+      - name: Build pristine KMSAN kernel
+        run: |
+          make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
+
+      - name: Run unpatched KMSAN guest
+        run: |
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh \
+            linux/arch/x86/boot/bzImage \
+            "$RUNNER_TEMP/kmsan-unpatched.log"
+
+      - name: Apply candidate fix and rebuild KMSAN kernel
+        run: |
+          PATCH="$GITHUB_WORKSPACE/security/nvmet-error-log-tail-lab/candidate-fix.patch"
+          git -C linux apply --check --verbose "$PATCH"
+          git -C linux apply --verbose "$PATCH"
+          git -C linux diff --check
+          python3 security/nvmet-error-log-tail-lab/check_fixed_source.py linux
+          make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
+
+      - name: Run candidate-fixed KMSAN guest
+        run: |
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh \
+            linux/arch/x86/boot/bzImage \
+            "$RUNNER_TEMP/kmsan-patched.log"
+
+      - name: Compare unpatched and patched KMSAN results
+        if: always()
+        run: |
+          python3 security/nvmet-error-log-tail-lab/compare_kmsan_runs.py \
+            "$RUNNER_TEMP/kmsan-unpatched.log" \
+            "$RUNNER_TEMP/kmsan-patched.log"
+
+      - name: Upload KMSAN A-B logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kmsan-unpatched-vs-fixed
+          path: |
+            ${{ runner.temp }}/kmsan-unpatched.log
+            ${{ runner.temp }}/kmsan-patched.log
+          if-no-files-found: ignore
+          retention-days: 7
+ linux/.config
 
       - name: Build pristine KMSAN kernel
         run: |
