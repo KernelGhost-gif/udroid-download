@@ -1,0 +1,190 @@
+name: NVMe-TCP Error Log tail test matrix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ci/nvmet-error-log-tail-lab
+    paths:
+      - 'security/nvmet-error-log-tail-lab/**'
+      - '.github/workflows/nvmet-error-log-tail-lab.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: udroid-nvmet-fast-matrix-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-audit:
+    name: Source audit against current Linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out udroid-download test harness
+        uses: actions/checkout@v4
+
+      - name: Validate harness syntax and build probe
+        run: |
+          bash -n security/nvmet-error-log-tail-lab/run-loopback.sh
+          bash -n security/nvmet-error-log-tail-lab/run-qemu-host-matrix.sh
+          bash -n security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh
+          python3 -m py_compile \
+            security/nvmet-error-log-tail-lab/check_source.py \
+            security/nvmet-error-log-tail-lab/check_fixed_source.py \
+            security/nvmet-error-log-tail-lab/compare_kmsan_runs.py \
+            security/nvmet-error-log-tail-lab/raw_tcp_probe.py
+          gcc -std=c11 -O2 -Wall -Wextra -Werror \
+            security/nvmet-error-log-tail-lab/probe.c \
+            -o "$RUNNER_TEMP/nvmet-tail-probe"
+
+      - name: Check out relevant upstream Linux source
+        uses: actions/checkout@v4
+        with:
+          repository: torvalds/linux
+          ref: master
+          path: linux
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            drivers/nvme/target/admin-cmd.c
+            drivers/nvme/target/core.c
+            drivers/nvme/target/nvmet.h
+            drivers/nvme/target/tcp.c
+            include/linux/nvme.h
+            lib/scatterlist.c
+
+      - name: Assert the unpatched data path
+        run: python3 security/nvmet-error-log-tail-lab/check_source.py linux
+
+  hosted-runtime:
+    name: Hosted runner NVMe/TCP baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install NVMe test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc linux-libc-dev nvme-cli kmod util-linux
+
+      - name: Run local loopback target and initiator
+        id: test
+        shell: bash
+        run: |
+          set +e
+          sudo bash security/nvmet-error-log-tail-lab/run-loopback.sh \
+            > "$RUNNER_TEMP/hosted-runtime.log" 2>&1
+          result=$?
+          cat "$RUNNER_TEMP/hosted-runtime.log"
+          if [ "$result" -eq 77 ]; then
+            echo "status=unsupported" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$result" -ne 0 ]; then
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            exit "$result"
+          fi
+          echo "status=completed" >> "$GITHUB_OUTPUT"
+
+      - name: Upload aggregate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-runtime-diagnostics
+          path: ${{ runner.temp }}/hosted-runtime.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  qemu-init-matrix:
+    name: QEMU init_on_alloc OFF vs ON
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install QEMU guest tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 busybox-static cpio gcc kmod util-linux zstd xz-utils
+
+      - name: Run both QEMU guest configurations
+        id: qemu
+        shell: bash
+        run: |
+          set +e
+          sudo bash security/nvmet-error-log-tail-lab/run-qemu-host-matrix.sh \
+            > "$RUNNER_TEMP/qemu-host-matrix.log" 2>&1
+          result=$?
+          cat "$RUNNER_TEMP/qemu-host-matrix.log"
+          if [ "$result" -eq 77 ]; then
+            echo "status=unsupported" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$result" -ne 0 ]; then
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            exit "$result"
+          fi
+          echo "status=completed" >> "$GITHUB_OUTPUT"
+
+      - name: Copy per-guest serial logs
+        if: always()
+        run: |
+          sudo cp /tmp/nvmet-qemu-host-matrix/uninitialized.log \
+            "$RUNNER_TEMP/qemu-uninitialized.log" 2>/dev/null || true
+          sudo cp /tmp/nvmet-qemu-host-matrix/hardened.log \
+            "$RUNNER_TEMP/qemu-hardened.log" 2>/dev/null || true
+
+      - name: Upload QEMU logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-init-matrix-logs
+          path: |
+            ${{ runner.temp }}/qemu-host-matrix.log
+            ${{ runner.temp }}/qemu-uninitialized.log
+            ${{ runner.temp }}/qemu-hardened.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  candidate-fix-build:
+    name: Apply candidate fix and compile NVMe target
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out full Linux source
+        uses: actions/checkout@v4
+        with:
+          repository: torvalds/linux
+          ref: master
+          path: linux
+          fetch-depth: 1
+
+      - name: Install kernel build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential flex bison bc libelf-dev libssl-dev dwarves python3
+
+      - name: Apply and validate tail-zeroing candidate
+        run: |
+          PATCH="$GITHUB_WORKSPACE/security/nvmet-error-log-tail-lab/candidate-fix.patch"
+          git -C linux apply --check --verbose "$PATCH"
+          git -C linux apply --verbose "$PATCH"
+          git -C linux diff --check
+          python3 security/nvmet-error-log-tail-lab/check_fixed_source.py linux
+
+      - name: Configure and compile changed NVMe target object
+        run: |
+          make -C linux defconfig
+          linux/scripts/config --file linux/.config \
+            --enable NVME_TARGET \
+            --enable NVME_TARGET_TCP
+          make -C linux olddefconfig
+          make -C linux -j2 drivers/nvme/target/admin-cmd.o
