@@ -1,0 +1,36 @@
+diff --git a/drivers/nvme/target/tcp.c b/drivers/nvme/target/tcp.c
+--- a/drivers/nvme/target/tcp.c
++++ b/drivers/nvme/target/tcp.c
+@@ -7,6 +7,7 @@
+ #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+ #include <linux/module.h>
++#include <linux/kmsan-checks.h>
+ #include <linux/init.h>
+ #include <linux/jiffies.h>
+ #include <linux/slab.h>
+@@ -698,6 +699,16 @@ static int nvmet_try_send_data(struct nvmet_tcp_cmd *cmd, bool last_in_batch)
+ 		struct page *page = sg_page(cmd->cur_sg);
+ 		struct bio_vec bvec;
+ 		u32 left = cmd->cur_sg->length - cmd->offset;
+ 
++		/*
++		 * MSG_SPLICE_PAGES can hand the page to the socket without an
++		 * instrumented byte copy. Explicitly check only the oversized
++		 * Error Information Log tail at the point it is sent.
++		 */
++		if (cmd->req.sq->qid == 0 &&
++		    cmd->req.cmd->common.opcode == 0x02 &&
++		    cmd->req.cmd->get_log_page.lid == 0x01 &&
++		    cmd->req.transfer_len > 8192U &&
++		    cmd->wbytes_done + left > 8192U) {
++			u32 skip = cmd->wbytes_done < 8192U ?
++				8192U - cmd->wbytes_done : 0;
++
++			kmsan_check_memory(page_address(page) +
++				cmd->cur_sg->offset + cmd->offset + skip,
++				left - skip);
++		}
++
+ 		if ((!last_in_batch && cmd->queue->send_list_len) ||
+ 		    cmd->wbytes_done + left < cmd->req.transfer_len ||
+ 		    queue->data_digest || !queue->nvme_sq.sqhd_disabled)
