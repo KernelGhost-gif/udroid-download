@@ -1,0 +1,173 @@
+name: Temporary Noble GNOME ARM64 build and X11 smoke test
+
+on:
+  push:
+    branches:
+      - ci/udroid-noble-gnome-check-20261109
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - name: Checkout fork with pinned submodules
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Record exact source revisions
+        run: |
+          set -euo pipefail
+          echo "MAIN=$(git rev-parse HEAD)"
+          echo "FS_COOK=$(git -C fs-cook rev-parse HEAD)"
+          git submodule status --recursive
+
+      - name: Install build and headless X11 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git build-essential binfmt-support qemu-user-static \
+            debootstrap xvfb xauth dbus-x11
+
+      - name: Restore pinned Ubuntu debootstrap source
+        env:
+          DEBOOTSTRAP_VERSION: 1.0.134ubuntu1
+          DEBOOTSTRAP_SHA256: e4077fc537d5edf9662305028b1ce7265ac4760086515be180b07b62d15f6a69
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/debootstrap.tar.gz"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output "$archive" \
+            "https://archive.ubuntu.com/ubuntu/pool/main/d/debootstrap/debootstrap_${DEBOOTSTRAP_VERSION}.tar.gz"
+          echo "$DEBOOTSTRAP_SHA256  $archive" | sha256sum --check --strict
+          mkdir -p fs-cook/core/debootstrap
+          tar --extract --gzip --file "$archive" \
+            --directory fs-cook/core/debootstrap --strip-components=1
+          test -s fs-cook/core/debootstrap/debootstrap
+          ./fs-cook/core/debootstrap/debootstrap --version
+
+      - name: Run source tests and syntax checks
+        run: |
+          set -euo pipefail
+          python3 -m compileall -q gen_data tests .github/scripts
+          python3 -m unittest discover -s tests -v
+          bash -n build.sh setup.sh
+          while IFS= read -r -d '' script; do
+            bash -n "$script"
+          done < <(find . -path './.git' -prune -o -type f -name '*.sh' -print0)
+
+      - name: Build Noble GNOME for ARM64
+        run: |
+          set -euo pipefail
+          sudo bash build.sh -s noble -v gnomeRaw -a arm64
+          test -s fs-cook/out/noble-gnomeRaw-arm64.tar.gz
+
+      - name: Validate the Ubuntu rootfs and inspect package versions
+        run: |
+          set -euo pipefail
+          image="fs-cook/out/noble-gnomeRaw-arm64.tar.gz"
+          rootfs="$RUNNER_TEMP/noble-gnomeRaw-arm64"
+          gzip -t "$image"
+          sha256sum "$image"
+          stat -c 'Rootfs archive size: %s bytes' "$image"
+          mkdir -p "$rootfs"
+          sudo tar --extract --gzip --file "$image" --directory "$rootfs" --numeric-owner
+          grep -E '^(PRETTY_NAME|VERSION_CODENAME)=' "$rootfs/etc/os-release"
+          grep -q '^VERSION_CODENAME=noble$' "$rootfs/etc/os-release"
+          sudo chroot "$rootfs" /usr/bin/gnome-shell --version
+          sudo python3 - "$rootfs/var/lib/dpkg/status" <<'PY'
+          import sys
+          from email.parser import Parser
+          from pathlib import Path
+
+          status = Path(sys.argv[1]).read_text(errors="replace")
+          packages = {}
+          for paragraph in status.split("\n\n"):
+              if not paragraph.strip():
+                  continue
+              fields = Parser().parsestr(paragraph)
+              name = fields.get("Package")
+              if name:
+                  packages[name] = fields.get("Version", "unknown")
+          required = ("gnome-shell", "libmutter-14-0", "libgl1-mesa-dri", "dbus-daemon")
+          missing = [name for name in required if name not in packages]
+          for name in required:
+              print(f"{name}: {packages.get(name, 'MISSING')}")
+          if missing:
+              raise SystemExit("Missing required packages: " + ", ".join(missing))
+          PY
+
+      - name: Smoke-test GNOME Shell under Xvfb on native ARM64
+        run: |
+          set -Eeuo pipefail
+          rootfs="$RUNNER_TEMP/noble-gnomeRaw-arm64"
+          xvfb_log="$RUNNER_TEMP/xvfb.log"
+          shell_log="$RUNNER_TEMP/gnome-shell-xvfb.log"
+          display=":97"
+          xvfb_pid=""
+          mounted=()
+
+          cleanup() {
+            for target in "${mounted[@]:-}"; do
+              sudo umount "$target" 2>/dev/null || true
+            done
+            if [[ -n "$xvfb_pid" ]]; then
+              sudo kill "$xvfb_pid" 2>/dev/null || true
+              wait "$xvfb_pid" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          sudo Xvfb "$display" -screen 0 1280x800x24 -nolisten tcp -ac -noreset >"$xvfb_log" 2>&1 &
+          xvfb_pid=$!
+          sleep 2
+          kill -0 "$xvfb_pid"
+
+          sudo mkdir -p "$rootfs/dev/pts" "$rootfs/proc" "$rootfs/sys" \
+            "$rootfs/tmp/.X11-unix" "$rootfs/run/dbus" "$rootfs/run/user/4242"
+          sudo mount --bind /dev "$rootfs/dev"
+          mounted+=("$rootfs/dev")
+          sudo mount --bind /dev/pts "$rootfs/dev/pts"
+          mounted+=("$rootfs/dev/pts")
+          sudo mount -t proc proc "$rootfs/proc"
+          mounted+=("$rootfs/proc")
+          sudo mount -t sysfs sysfs "$rootfs/sys"
+          mounted+=("$rootfs/sys")
+          sudo mount --bind /tmp/.X11-unix "$rootfs/tmp/.X11-unix"
+          mounted+=("$rootfs/tmp/.X11-unix")
+
+          sudo chroot "$rootfs" /usr/bin/dbus-uuidgen --ensure=/etc/machine-id
+          sudo chroot "$rootfs" /usr/bin/dbus-daemon --system --fork --nopidfile --nosyslog
+          sudo chroot "$rootfs" /usr/sbin/useradd --uid 4242 --create-home --shell /bin/bash gnome-smoke
+          sudo install -d -m 0700 -o 4242 -g 4242 "$rootfs/run/user/4242"
+
+          set +e
+          sudo timeout --signal=TERM --kill-after=5s 45s \
+            chroot --userspec=4242:4242 "$rootfs" /usr/bin/env \
+              HOME=/home/gnome-smoke \
+              USER=gnome-smoke LOGNAME=gnome-smoke \
+              DISPLAY="$display" \
+              XDG_RUNTIME_DIR=/run/user/4242 \
+              XDG_SESSION_TYPE=x11 \
+              XDG_CURRENT_DESKTOP=GNOME \
+              XDG_SESSION_DESKTOP=gnome \
+              GSK_RENDERER=cairo \
+              LIBGL_ALWAYS_SOFTWARE=1 \
+              GALLIUM_DRIVER=llvmpipe \
+              /usr/bin/dbus-run-session -- /usr/bin/gnome-shell --x11 --sm-disable \
+              >"$shell_log" 2>&1
+          rc=$?
+          set -e
+
+          cat "$shell_log"
+          if [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then
+            echo "PASS: GNOME Shell remained alive for the 45-second Xvfb smoke test."
+          else
+            echo "FAIL: GNOME Shell exited before the smoke-test timeout (exit=$rc)."
+            cat "$xvfb_log"
+            exit 1
+          fi
