@@ -45,7 +45,7 @@ static int run_one(int fd, size_t data_len)
 	unsigned int unique = 0;
 	int rc;
 
-	if (data_len < ERROR_LOG_BYTES || (data_len & 3U)) {
+	if (data_len < sizeof(uint32_t) || (data_len & 3U)) {
 		fprintf(stderr, "invalid data length: %zu\n", data_len);
 		return -1;
 	}
@@ -92,8 +92,8 @@ static int run_one(int fd, size_t data_len)
 		return 2;
 	}
 
-	tail_len = data_len - ERROR_LOG_BYTES;
-	for (i = ERROR_LOG_BYTES; i < data_len; i++) {
+	tail_len = data_len > ERROR_LOG_BYTES ? data_len - ERROR_LOG_BYTES : 0;
+	for (i = data_len < ERROR_LOG_BYTES ? data_len : ERROR_LOG_BYTES; i < data_len; i++) {
 		unsigned char v = buf[i];
 
 		if (v)
@@ -140,7 +140,7 @@ int main(int argc, char **argv)
 	int fd, overall = 0, i;
 
 	if (argc < 3) {
-		fprintf(stderr, "usage: %s /dev/nvmeX 8192 [16384 ...]\n",
+		fprintf(stderr, "usage: %s /dev/nvmeX 4 [64 68 4096 8188 8192 8196 16384 65536 ...]\n",
 			argv[0]);
 		return 64;
 	}
