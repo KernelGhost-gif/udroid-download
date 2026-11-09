@@ -76,6 +76,15 @@ def main(root: str) -> int:
             "len *= sizeof(u32)" in get_len,
             "Get Log Page transfer length is derived from NUMD")
 
+    admin_len = block_after(admin, "u32 nvmet_admin_cmd_data_len")
+    require("case nvme_admin_get_log_page" in admin_len and
+            "return nvmet_get_log_page_len(cmd)" in admin_len,
+            "admin command parser accepts the NUMD-derived Get Log Page transfer size")
+
+    identify_ctrl = block_after(admin, "static void nvmet_execute_identify_ctrl")
+    require("id->elpe = NVMET_ERROR_LOG_SLOTS - 1" in identify_ctrl,
+            "controller advertises the full Error Log slot count (ELPE)")
+
     check_len = block_after(core, "bool nvmet_check_transfer_len")
     require("len != req->transfer_len" in check_len,
             "generic transfer check compares requested length to command-derived length")
