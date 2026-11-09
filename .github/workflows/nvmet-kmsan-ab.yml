@@ -22,7 +22,11 @@ jobs:
       - name: Validate scripts and probe
         run: |
           bash -n security/nvmet-error-log-tail-lab/run-qemu-kmsan.sh
-          python3 -m py_compile security/nvmet-error-log-tail-lab/compare_kmsan_runs.py
+          python3 -m py_compile \
+            security/nvmet-error-log-tail-lab/check_source.py \
+            security/nvmet-error-log-tail-lab/check_fixed_source.py \
+            security/nvmet-error-log-tail-lab/compare_kmsan_runs.py \
+            security/nvmet-error-log-tail-lab/raw_tcp_probe.py
           gcc -std=c11 -O2 -Wall -Wextra -Werror \
             security/nvmet-error-log-tail-lab/probe.c \
             -o "$RUNNER_TEMP/nvmet-tail-probe"
@@ -34,6 +38,9 @@ jobs:
           ref: master
           path: linux
           fetch-depth: 1
+
+      - name: Audit unpatched upstream Error Log response path
+        run: python3 security/nvmet-error-log-tail-lab/check_source.py linux
 
       - name: Apply test-only KMSAN check at the TCP send boundary
         run: |
