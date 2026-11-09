@@ -12,13 +12,13 @@ The source audit verifies the following path in upstream Linux:
 4. `nvmet_execute_get_log_page_error()` copies at most 128 × 64 bytes (8192 bytes) and completes success without initializing a larger transfer tail.
 5. `nvmet_setup_c2h_data_pdu()` describes the full requested transfer and `nvmet_try_send_data()` sends the scatterlist through `MSG_SPLICE_PAGES`.
 
-The target advertises ELPE=127 (128 slots). The oversized tail is therefore beyond the complete valid Error Information Log.
+The target advertises ELPE=127 (128 slots). The oversized tail is therefore beyond the complete valid Error Information Log. The source path was checked in upstream tags v5.0, v5.4, v5.10, v5.15, v6.1, v6.6, v6.12, v6.18, v7.0, and current master. The original Error Log handler was introduced in December 2018 by commit `11ad507784ed`.
 
 ## Partial-read compatibility
 
 Upstream intentionally supports short Error Log reads. Commit `5f8badbcbeac` changed the handler to return as many entries as fit instead of failing when the supplied transfer buffer is shorter than the full log.
 
-The candidate fix preserves this behavior: it copies `min(slot_size, bytes_remaining)` for the final partial slot, then zeroes only the bytes after the fixed 8192-byte log. It propagates genuine SGL-copy/zero errors and performs the zeroing after releasing `error_lock`.
+The candidate fix zeroes the complete response SGL before copying any Error Log slots. This preserves the original short-read behavior exactly: the existing loop still copies as many complete or partial bytes as fit and completes successfully. Zeroing takes place before acquiring `error_lock`, and a zeroing failure is returned immediately.
 
 The regression matrix includes 4, 64, 68, 4096, 8188, 8192, 8196, 16384, and 65536-byte transfers. The short and boundary lengths check protocol compatibility; oversized requests check tail initialization.
 
