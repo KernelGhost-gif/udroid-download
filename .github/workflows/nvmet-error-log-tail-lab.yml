@@ -2,9 +2,6 @@ name: NVMe-TCP Error Log tail test matrix
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - ci/nvmet-error-log-tail-lab
 
 permissions:
   contents: read
