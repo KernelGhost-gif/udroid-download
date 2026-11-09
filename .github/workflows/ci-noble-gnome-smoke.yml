@@ -48,6 +48,7 @@ jobs:
           tar --extract --gzip --file "$archive" \
             --directory fs-cook/core/debootstrap --strip-components=1
           test -s fs-cook/core/debootstrap/debootstrap
+          chmod 0755 fs-cook/core/debootstrap/debootstrap
           ./fs-cook/core/debootstrap/debootstrap --version
 
       - name: Run source tests and syntax checks
