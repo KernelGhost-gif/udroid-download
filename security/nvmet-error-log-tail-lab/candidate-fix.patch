@@ -1,32 +1,66 @@
 diff --git a/drivers/nvme/target/admin-cmd.c b/drivers/nvme/target/admin-cmd.c
 --- a/drivers/nvme/target/admin-cmd.c
 +++ b/drivers/nvme/target/admin-cmd.c
-@@ -177,21 +177,25 @@ static void nvmet_execute_get_log_page_error(struct nvmet_req *req)
- 	off_t offset = 0;
- 	u64 slot;
- 	u64 i;
-+	u16 status = 0;
- 
- 	spin_lock_irqsave(&ctrl->error_lock, flags);
- 	slot = ctrl->err_counter % NVMET_ERROR_LOG_SLOTS;
- 
- 	for (i = 0; i < NVMET_ERROR_LOG_SLOTS; i++) {
+@@ -175,25 +175,37 @@
+-static void nvmet_execute_get_log_page_error(struct nvmet_req *req)
+-{
+-	struct nvmet_ctrl *ctrl = req->sq->ctrl;
+-	unsigned long flags;
+-	off_t offset = 0;
+-	u64 slot;
+-	u64 i;
+-
+-	spin_lock_irqsave(&ctrl->error_lock, flags);
+-	slot = ctrl->err_counter % NVMET_ERROR_LOG_SLOTS;
+-
+-	for (i = 0; i < NVMET_ERROR_LOG_SLOTS; i++) {
 -		if (nvmet_copy_to_sgl(req, offset, &ctrl->slots[slot],
 -				sizeof(struct nvme_error_slot)))
-+		status = nvmet_copy_to_sgl(req, offset, &ctrl->slots[slot],
-+					   sizeof(struct nvme_error_slot));
-+		if (status)
- 			break;
- 
- 		if (slot == 0)
- 			slot = NVMET_ERROR_LOG_SLOTS - 1;
- 		else
- 			slot--;
- 		offset += sizeof(struct nvme_error_slot);
- 	}
- 	spin_unlock_irqrestore(&ctrl->error_lock, flags);
+-			break;
+-
+-		if (slot == 0)
+-			slot = NVMET_ERROR_LOG_SLOTS - 1;
+-		else
+-			slot--;
+-		offset += sizeof(struct nvme_error_slot);
+-	}
+-	spin_unlock_irqrestore(&ctrl->error_lock, flags);
 -	nvmet_req_complete(req, 0);
+-}
++static void nvmet_execute_get_log_page_error(struct nvmet_req *req)
++{
++	struct nvmet_ctrl *ctrl = req->sq->ctrl;
++	unsigned long flags;
++	off_t offset = 0;
++	size_t copy_len;
++	u64 slot;
++	u64 i;
++	u16 status = 0;
++
++	spin_lock_irqsave(&ctrl->error_lock, flags);
++	slot = ctrl->err_counter % NVMET_ERROR_LOG_SLOTS;
++
++	for (i = 0; i < NVMET_ERROR_LOG_SLOTS; i++) {
++		if (offset >= req->transfer_len)
++			break;
++
++		copy_len = min_t(size_t, sizeof(struct nvme_error_slot),
++				 req->transfer_len - offset);
++		status = nvmet_copy_to_sgl(req, offset, &ctrl->slots[slot],
++					   copy_len);
++		if (status)
++			break;
++		offset += copy_len;
++		if (copy_len < sizeof(struct nvme_error_slot))
++			break;
++
++		if (slot == 0)
++			slot = NVMET_ERROR_LOG_SLOTS - 1;
++		else
++			slot--;
++	}
++	spin_unlock_irqrestore(&ctrl->error_lock, flags);
 +	if (!status && offset < req->transfer_len)
 +		status = nvmet_zero_sgl(req, offset, req->transfer_len - offset);
 +	nvmet_req_complete(req, status);
- }
++}
