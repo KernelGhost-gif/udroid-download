@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate candidate fix while preserving short/partial Error Log reads."""
+"""Validate the minimal zero-first Error Log fix and preserved read semantics."""
 from pathlib import Path
 import sys
 
@@ -8,28 +8,30 @@ def main(root: str) -> int:
     src = Path(root, "drivers/nvme/target/admin-cmd.c").read_text()
     marker = "static void nvmet_execute_get_log_page_error"
     start = src.index(marker)
-    end = src.index("\nstatic void nvmet_execute_get_supported_log_pages", start)
+    end = src.index(
+        "\nstatic void nvmet_execute_get_supported_log_pages", start
+    )
     body = src[start:end]
+    zero = body.find("status = nvmet_zero_sgl(req, 0, req->transfer_len)")
+    lock = body.find("spin_lock_irqsave")
     checks = {
-        "copies no more than one slot per iteration":
-            "sizeof(struct nvme_error_slot)" in body and "copy_len" in body,
-        "preserves partial and short reads":
-            "min_t(size_t, sizeof(struct nvme_error_slot)" in body and
-            "req->transfer_len - offset" in body and
-            "if (copy_len < sizeof(struct nvme_error_slot))" in body,
-        "copy errors are propagated":
-            "status = nvmet_copy_to_sgl" in body and "if (status)" in body,
-        "offset advances only by bytes actually copied":
-            "offset += copy_len" in body and
-            "offset += sizeof(struct nvme_error_slot)" not in body,
-        "tail is zeroed after releasing error_lock":
-            "spin_unlock_irqrestore" in body and
-            "nvmet_zero_sgl" in body and
-            body.index("spin_unlock_irqrestore") < body.index("nvmet_zero_sgl"),
-        "all remaining response bytes are zeroed":
-            "nvmet_zero_sgl(req, offset, req->transfer_len - offset)" in body,
-        "completion returns real copy/zero status":
-            "nvmet_req_complete(req, status)" in body,
+        "entire requested SGL is zeroed":
+            zero >= 0,
+        "zeroing occurs before the Error Log copy lock":
+            zero >= 0 and lock > zero,
+        "zeroing failure is returned and processing stops":
+            "if (status)" in body and
+            "nvmet_req_complete(req, status)" in body and
+            "return;" in body[:lock],
+        "original slot-copy loop remains unchanged":
+            "if (nvmet_copy_to_sgl(req, offset, &ctrl->slots[slot]," in body and
+            "sizeof(struct nvme_error_slot)" in body and
+            "offset += sizeof(struct nvme_error_slot)" in body,
+        "short and partial-slot reads retain original behavior":
+            "if (nvmet_copy_to_sgl" in body and
+            "nvmet_req_complete(req, 0)" in body,
+        "no second tail-clearing path changes copy semantics":
+            body.count("nvmet_zero_sgl") == 1,
     }
     for label, ok in checks.items():
         print(f'{"PASS" if ok else "FAIL"}: {label}')
