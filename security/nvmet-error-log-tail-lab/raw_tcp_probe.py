@@ -147,8 +147,8 @@ def set_cc(sock: socket.socket, command_id: int) -> None:
 
 
 def issue_get_log(sock: socket.socket, command_id: int, data_len: int) -> bytes:
-    if data_len < 8192 or data_len % 4:
-        raise ValueError("data_len must be a multiple of four and >= 8192")
+    if data_len < 4 or data_len % 4:
+        raise ValueError("data_len must be a multiple of four and >= 4")
     numd = data_len // 4 - 1
     cmd = bytearray(64)
     cmd[0] = GET_LOG_PAGE
@@ -220,7 +220,7 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=4420)
     parser.add_argument("--subsysnqn", required=True)
     parser.add_argument("--hostnqn", default="nqn.2026-11.io.udroid:raw-unprivileged-host")
-    parser.add_argument("--lengths", nargs="+", type=int, default=[8192, 16384, 65536])
+    parser.add_argument("--lengths", nargs="+", type=int, default=[4, 64, 68, 4096, 8188, 8192, 8196, 16384, 65536])
     args = parser.parse_args()
 
     with socket.create_connection((args.host, args.port), timeout=5) as sock:
