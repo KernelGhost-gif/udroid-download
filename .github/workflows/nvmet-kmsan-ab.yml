@@ -2,6 +2,9 @@ name: NVMe-TCP Error Log KMSAN A-B
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ci/nvmet-error-log-tail-lab
 
 permissions:
   contents: read
@@ -34,6 +37,14 @@ jobs:
           ref: master
           path: linux
           fetch-depth: 1
+
+      - name: Apply test-only KMSAN check at the TCP send boundary
+        run: |
+          PATCH="$GITHUB_WORKSPACE/security/nvmet-error-log-tail-lab/kmsan-tail-check.patch"
+          git -C linux apply --check --verbose "$PATCH"
+          git -C linux apply --verbose "$PATCH"
+          git -C linux diff --check
+          grep -q 'kmsan_check_memory' linux/drivers/nvme/target/tcp.c
 
       - name: Install Clang, kernel and QEMU dependencies
         run: |
@@ -73,7 +84,7 @@ jobs:
           grep -q '^CONFIG_BLK_DEV_RAM=y$' linux/.config
           grep -q '^CONFIG_BLK_DEV_RAM_COUNT=1$' linux/.config
 
-      - name: Build pristine KMSAN kernel
+      - name: Build baseline KMSAN kernel with send-boundary checker
         run: |
           make -C linux ARCH=x86_64 LLVM=1 -j3 bzImage
 
