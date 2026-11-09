@@ -46,6 +46,6 @@ On 2026-11-04, upstream commit `29b8758b4700` fixed the analogous ANA Log Page i
 
 ## Reachability and safety
 
-The raw unprivileged protocol test demonstrates command acceptance only against this disposable loopback target configured with `allow_any_host=1`. It does not establish remote unauthenticated reachability or production host-authentication policy.
+The raw unprivileged protocol test uses a disposable loopback target with `allow_any_host=0` and two explicitly allowlisted Host NQNs. The `nobody` process successfully connects using one allowlisted NQN with no DH-HMAC-CHAP secret configured; a second unlisted NQN is rejected. This demonstrates that the raw TCP operation does not require local root/CAP_SYS_ADMIN, while access still depends on the target's Host NQN policy and any configured authentication. It does not establish remote reachability to a production target or bypass a configured DH-HMAC-CHAP secret.
 
 No production endpoint is contacted. Raw response bytes are not printed, saved, or uploaded. This is a reproducer and candidate mitigation, not a claim that sensitive data has been recovered.
