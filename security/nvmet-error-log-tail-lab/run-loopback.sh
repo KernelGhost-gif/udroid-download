@@ -132,7 +132,7 @@ cc -std=c11 -O2 -Wall -Wextra -Werror \
 	"$HERE/probe.c" -o /tmp/nvmet-tail-probe
 
 echo "=== Running 8 KiB baseline, then oversized reads ==="
-/tmp/nvmet-tail-probe "$CONTROLLER" 8192 16384 65536
+/tmp/nvmet-tail-probe "$CONTROLLER" 4 64 68 4096 8188 8192 8196 16384 65536
 
 echo "=== Raw NVMe/TCP probe as unprivileged user ==="
 if ! command -v runuser >/dev/null 2>&1; then
