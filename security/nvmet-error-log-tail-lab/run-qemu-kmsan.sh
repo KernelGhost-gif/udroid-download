@@ -104,7 +104,7 @@ if [ -z "$CTRL" ] || [ ! -c "$CTRL" ]; then
 fi
 
 echo "KMSAN_CONTROLLER=$CTRL"
-/bin/nvmet-tail-probe "$CTRL" 8192 16384 65536
+/bin/nvmet-tail-probe "$CTRL" 4 64 68 4096 8188 8192 8196 16384 65536
 echo "KMSAN_GUEST_DONE"
 poweroff -f
 INIT
@@ -135,7 +135,7 @@ if ! grep -q "KMSAN_GUEST_DONE" "$LOG"; then
 fi
 if grep -q "KMSAN_GUEST_ERROR=" "$LOG" || \
    ! grep -q "^KMSAN_CONTROLLER=" "$LOG" || \
-   ! grep -q "RESULT len=8192" "$LOG"; then
+   ! grep -q "RESULT len=4" "$LOG" || ! grep -q "RESULT len=8192" "$LOG" || ! grep -q "RESULT len=65536" "$LOG"; then
 	echo "KMSAN_QEMU=GUEST_PROBE_FAILED"
 	exit 1
 fi
