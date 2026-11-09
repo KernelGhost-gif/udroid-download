@@ -140,7 +140,7 @@ if [ -z "$CTRL" ] || [ ! -c "$CTRL" ]; then
 	poweroff -f
 fi
 echo "GUEST_CONTROLLER=$CTRL"
-/bin/nvmet-tail-probe "$CTRL" 8192 16384 65536
+/bin/nvmet-tail-probe "$CTRL" 4 64 68 4096 8188 8192 8196 16384 65536
 echo "GUEST_LAB_DONE"
 poweroff -f
 INIT
