@@ -102,6 +102,15 @@ jobs:
               raise SystemExit("Missing required packages: " + ", ".join(missing))
           PY
 
+      - name: Upload built Noble GNOME ARM64 rootfs
+        uses: actions/upload-artifact@v4
+        with:
+          name: noble-gnomeRaw-arm64-rootfs
+          path: fs-cook/out/noble-gnomeRaw-arm64.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
       - name: Smoke-test GNOME Shell under Xvfb on native ARM64
         run: |
           set -Eeuo pipefail
@@ -142,7 +151,13 @@ jobs:
           mounted+=("$rootfs/tmp/.X11-unix")
 
           sudo chroot "$rootfs" /usr/bin/dbus-uuidgen --ensure=/etc/machine-id
-          sudo chroot "$rootfs" /usr/bin/dbus-daemon --system --fork --nopidfile --nosyslog
+          test -S /run/dbus/system_bus_socket
+          sudo touch "$rootfs/run/dbus/system_bus_socket"
+          sudo mount --bind /run/dbus/system_bus_socket "$rootfs/run/dbus/system_bus_socket"
+          mounted+=("$rootfs/run/dbus/system_bus_socket")
+          sudo busctl --system status org.freedesktop.login1
+          sudo chroot "$rootfs" /usr/bin/dbus-send --system --print-reply \
+            --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames >/dev/null
           sudo chroot "$rootfs" /usr/sbin/useradd --uid 4242 --create-home --shell /bin/bash gnome-smoke
           sudo install -d -m 0700 -o 4242 -g 4242 "$rootfs/run/user/4242"
 
