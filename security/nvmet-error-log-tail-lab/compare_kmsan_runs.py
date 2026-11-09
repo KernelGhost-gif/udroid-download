@@ -10,8 +10,8 @@ RELEVANT = re.compile(
     re.IGNORECASE,
 )
 SGL_ORIGIN = re.compile(
-    r"Uninit was created at:[\\s\\S]{0,1200}"
-    r"sgl_alloc_order[\\s\\S]{0,500}nvmet_tcp_map_data",
+    r"Uninit was created at:[\s\S]{0,1200}"
+    r"sgl_alloc_order[\s\S]{0,500}nvmet_tcp_map_data",
     re.IGNORECASE,
 )
 
