@@ -2,8 +2,8 @@ diff --git a/drivers/nvme/target/admin-cmd.c b/drivers/nvme/target/admin-cmd.c
 --- a/drivers/nvme/target/admin-cmd.c
 +++ b/drivers/nvme/target/admin-cmd.c
 @@ -175,25 +175,32 @@
--static void nvmet_execute_get_log_page_error(struct nvmet_req *req)
--{
+ static void nvmet_execute_get_log_page_error(struct nvmet_req *req)
+ {
 -	struct nvmet_ctrl *ctrl = req->sq->ctrl;
 -	unsigned long flags;
 -	off_t offset = 0;
@@ -26,9 +26,6 @@ diff --git a/drivers/nvme/target/admin-cmd.c b/drivers/nvme/target/admin-cmd.c
 -	}
 -	spin_unlock_irqrestore(&ctrl->error_lock, flags);
 -	nvmet_req_complete(req, 0);
--}
-+static void nvmet_execute_get_log_page_error(struct nvmet_req *req)
-+{
 +	struct nvmet_ctrl *ctrl = req->sq->ctrl;
 +	unsigned long flags;
 +	off_t offset = 0;
@@ -58,4 +55,4 @@ diff --git a/drivers/nvme/target/admin-cmd.c b/drivers/nvme/target/admin-cmd.c
 +	}
 +	spin_unlock_irqrestore(&ctrl->error_lock, flags);
 +	nvmet_req_complete(req, 0);
-+}
+ }
