@@ -4,11 +4,16 @@ set -Eeuo pipefail
 HERE="$(cd -- "$(dirname -- "$0")" && pwd)"
 NQN="nqn.2026-11.io.udroid:nvmet-error-log-tail-lab"
 HOSTNQN="nqn.2026-11.io.udroid:github-actions-host"
+RAW_HOSTNQN="nqn.2026-11.io.udroid:raw-unprivileged-host"
+UNAUTHORIZED_HOSTNQN="nqn.2026-11.io.udroid:unauthorized-host"
 PORT_ID="41"
 PORT_DIR="/sys/kernel/config/nvmet/ports/$PORT_ID"
 SUBSYS_DIR="/sys/kernel/config/nvmet/subsystems/$NQN"
+HOST_DIR="/sys/kernel/config/nvmet/hosts/$HOSTNQN"
+RAW_HOST_DIR="/sys/kernel/config/nvmet/hosts/$RAW_HOSTNQN"
 IMAGE="/tmp/nvmet-tail-lab.img"
 RAW_PROBE="/tmp/nvmet-raw-probe-$.py"
+UNAUTH_LOG="/tmp/nvmet-raw-unauthorized-$.log"
 LOOP=""
 CONTROLLER=""
 MOUNTED_CONFIGFS_HERE=0
@@ -26,12 +31,15 @@ cleanup() {
 		rm -f "$PORT_DIR/subsystems/$NQN"
 	fi
 	rmdir "$PORT_DIR" 2>/dev/null
+	rm -f "$SUBSYS_DIR/allowed_hosts/$HOSTNQN" \
+		"$SUBSYS_DIR/allowed_hosts/$RAW_HOSTNQN"
 	rmdir "$SUBSYS_DIR/namespaces/1" 2>/dev/null
 	rmdir "$SUBSYS_DIR" 2>/dev/null
+	rmdir "$HOST_DIR" "$RAW_HOST_DIR" 2>/dev/null
 	if [ -n "$LOOP" ]; then
 		losetup -d "$LOOP" 2>/dev/null
 	fi
-	rm -f "$IMAGE" /tmp/nvmet-tail-probe "$RAW_PROBE"
+	rm -f "$IMAGE" /tmp/nvmet-tail-probe "$RAW_PROBE" "$UNAUTH_LOG"
 	if [ "$MOUNTED_CONFIGFS_HERE" -eq 1 ]; then
 		umount /sys/kernel/config 2>/dev/null
 	fi
@@ -60,7 +68,7 @@ for parameter in /sys/module/page_alloc/parameters/init_on_alloc /sys/module/pag
 	fi
 done
 echo "Target NQN: $NQN"
-echo "Target host policy: allow_any_host=1 (isolated loopback only)"
+echo "Target host policy: explicit allowed-host list; no DH-HMAC-CHAP secret configured"
 echo "Transport endpoint: 127.0.0.1:4420"
 
 for module in nvmet nvmet-tcp nvme-tcp loop; do
@@ -90,8 +98,12 @@ if ! LOOP="$(losetup --find --show "$IMAGE")"; then
 	exit 77
 fi
 
+mkdir "$HOST_DIR"
+mkdir "$RAW_HOST_DIR"
 mkdir "$SUBSYS_DIR"
-echo 1 > "$SUBSYS_DIR/attr_allow_any_host"
+echo 0 > "$SUBSYS_DIR/attr_allow_any_host"
+ln -s "$HOST_DIR" "$SUBSYS_DIR/allowed_hosts/$HOSTNQN"
+ln -s "$RAW_HOST_DIR" "$SUBSYS_DIR/allowed_hosts/$RAW_HOSTNQN"
 mkdir "$SUBSYS_DIR/namespaces/1"
 echo "$LOOP" > "$SUBSYS_DIR/namespaces/1/device_path"
 echo 1 > "$SUBSYS_DIR/namespaces/1/enable"
@@ -131,10 +143,10 @@ echo "Connected controller: $CONTROLLER"
 cc -std=c11 -O2 -Wall -Wextra -Werror \
 	"$HERE/probe.c" -o /tmp/nvmet-tail-probe
 
-echo "=== Running 8 KiB baseline, then oversized reads ==="
+echo "=== Running short, boundary, and oversized Get Log Page requests ==="
 /tmp/nvmet-tail-probe "$CONTROLLER" 4 64 68 4096 8188 8192 8196 16384 65536
 
-echo "=== Raw NVMe/TCP probe as unprivileged user ==="
+echo "=== Raw NVMe/TCP probe as unprivileged allowed host ==="
 if ! command -v runuser >/dev/null 2>&1; then
 	echo "RAW_TCP_PROBE=SKIPPED (runuser unavailable)"
 	exit 77
@@ -143,7 +155,8 @@ cp "$HERE/raw_tcp_probe.py" "$RAW_PROBE"
 chmod 0644 "$RAW_PROBE"
 set +e
 runuser -u nobody -- python3 "$RAW_PROBE" \
-	--host 127.0.0.1 --port 4420 --subsysnqn "$NQN"
+	--host 127.0.0.1 --port 4420 --subsysnqn "$NQN" \
+	--hostnqn "$RAW_HOSTNQN"
 RAW_STATUS=$?
 set -e
 if [ "$RAW_STATUS" -ne 0 ]; then
@@ -151,7 +164,22 @@ if [ "$RAW_STATUS" -ne 0 ]; then
 	dmesg | tail -n 100
 	exit "$RAW_STATUS"
 fi
-sleep 1
 
+echo "=== Unknown Host NQN admission check ==="
+set +e
+runuser -u nobody -- python3 "$RAW_PROBE" \
+	--host 127.0.0.1 --port 4420 --subsysnqn "$NQN" \
+	--hostnqn "$UNAUTHORIZED_HOSTNQN" --lengths 8192 \
+	> "$UNAUTH_LOG" 2>&1
+UNAUTH_STATUS=$?
+set -e
+if [ "$UNAUTH_STATUS" -eq 0 ] || ! grep -q "Fabrics Connect rejected" "$UNAUTH_LOG"; then
+	cat "$UNAUTH_LOG"
+	echo "RAW_TCP_UNAUTHORIZED_HOST=UNEXPECTED_RESULT"
+	exit 1
+fi
+echo "RAW_TCP_UNAUTHORIZED_HOST=REJECTED"
+
+sleep 1
 echo "=== Runtime test completed ==="
-echo "Raw response bytes were not written to disk or uploaded."
+echo "Raw response bytes were summarized only; no response contents were saved."
