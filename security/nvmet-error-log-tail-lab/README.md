@@ -1,73 +1,39 @@
 # NVMe/TCP Error Log tail disclosure lab
 
-This directory contains a deliberately narrow, localhost-only regression experiment for the Linux NVMe target Error Information Log Page (LID 0x01).
+This directory contains a localhost-only regression experiment for the Linux NVMe target Error Information Log Page (LID 0x01).
 
-## What it checks
+## What the source audit establishes
 
-1. check_source.py asserts the current upstream source relationships behind the candidate:
-   - 128 target Error Log entries, each 64 bytes (8 KiB total);
-   - the Error Log handler copies those entries but does not clear a larger requested response tail;
-   - NVMe/TCP allocates a response scatterlist for the requested descriptor length and sends the full transfer length;
-   - the scatterlist page allocator does not request __GFP_ZERO.
-2. run-loopback.sh configures a temporary nvmet subsystem backed by a disposable loop device, connects an NVMe/TCP initiator to 127.0.0.1, and issues 8 KiB, 16 KiB, and 64 KiB Get Log Page requests.
-3. probe.c reports only aggregate tail statistics. It never writes response bytes to disk or uploads them as artifacts. Before oversized requests it makes a best-effort attempt to return pages filled with a harmless 0xA5 marker to the page allocator.
+The current upstream path has three relevant steps:
 
-## Interpreting results
+1. `nvmet_tcp_map_data()` takes the requested SGL length and allocates the response pages with `sgl_alloc(len, GFP_KERNEL | __GFP_NOWARN, ...)`.
+2. `sgl_alloc_order()` obtains each payload page with `alloc_pages(gfp, 0)`. The scatterlist metadata is initialized, but this call does not request `__GFP_ZERO`.
+3. `nvmet_execute_get_log_page_error()` copies the fixed 128 × 64-byte Error Information Log (8192 bytes). In the unpatched implementation it completes successfully without writing the rest of a larger transfer. NVMe/TCP then sends the complete `req.transfer_len` using `MSG_SPLICE_PAGES`.
 
-- TEST_MARKER_REAPPEARED: at least 64 consecutive marker bytes appeared beyond byte 8191. This is strong evidence that the response tail was not overwritten and that the allocator reused the test pages.
-- NONZERO_TAIL_OBSERVED: the tail contained non-zero bytes, but the marker was not reproduced. This is evidence of a non-zero tail, not by itself proof that the bytes are sensitive kernel data.
-- ZERO_TAIL_INCONCLUSIVE: the response tail was all zero. This does not disprove the source-level issue; allocator zeroing or page reuse may mask it.
-- REQUEST_REJECTED: the command was rejected. Inspect the command status and runner logs before drawing conclusions.
-- RUNTIME_UNSUPPORTED: the GitHub-hosted runner did not expose the required kernel modules or configfs/loop-device support. The source audit still runs independently.
+This gives a precise candidate path for allocator-resident bytes to reach the host. It does not, by itself, establish that naturally allocated tail bytes are sensitive or disclose another user's data.
 
-The standard Linux host ioctl path restricts admin passthrough to privileged callers. This lab uses root inside a disposable GitHub-hosted runner and connects only to loopback. It does not test exposure to an unauthenticated remote host.
+## Runtime probes
 
-## Safety and scope
+- `run-loopback.sh` configures a disposable target backed by a temporary loop device, connects only to 127.0.0.1, and checks 8 KiB, 16 KiB, and 64 KiB requests.
+- `probe.c` reports aggregate tail statistics only. It never writes raw response bytes to disk or uploads them as artifacts.
+- The userspace `0xA5` spray is best-effort only. It does not guarantee that the target's later `alloc_pages()` calls reuse those exact pages. A marker match is useful evidence; a non-match says little about allocator provenance.
+- No `page_spray.ko` module is currently built or loaded by the KMSAN guest. Earlier README wording that implied it was loaded was inaccurate.
 
-- No production target or external NVMe endpoint is contacted.
-- The target namespace is a temporary 64 MiB image on a loop device.
-- allow_any_host is enabled only on the disposable loopback subsystem.
-- Raw response data is never logged or uploaded.
-- This is a reproduction harness, not a claim that a vulnerability has been confirmed. KMSAN or a controlled allocator reproduction would still be useful to establish uninitialized-memory provenance.
+## KMSAN send-boundary check
 
+The KMSAN A/B workflow applies `kmsan-tail-check.patch` to the test kernel before either run. This test-only instrumentation calls `kmsan_check_memory()` on the Error Log response tail immediately before NVMe/TCP passes that range to `sock_sendmsg(MSG_SPLICE_PAGES)`.
 
-## Expanded parallel test matrix
+This matters because page-splice send paths can transfer page references rather than performing an ordinary instrumented byte copy. The explicit check verifies KMSAN metadata at the actual transport boundary and should retain the allocation origin in a report.
 
-The workflow now runs the following independent jobs:
+Interpretation:
 
-- Source audit against current upstream Linux.
-- Hosted-runner NVMe/TCP loopback baseline.
-- QEMU comparison with page auto-initialization explicitly disabled and enabled.
-- Candidate-fix application, source assertions, and compilation of the changed NVMe target object.
-- A KMSAN-enabled x86_64 kernel booted in QEMU. The unpatched handler is tested first; the candidate fix is then applied and the same KMSAN guest is run again.
+- A KMSAN report in `nvmet_try_send_data()` on the unpatched kernel confirms that bytes in the oversized Error Log tail are still marked uninitialized at the send boundary. The KMSAN origin stack can then identify the allocation path.
+- If the candidate zero-tail patch removes that report and the returned tail is all zero, that is strong evidence the patch closes this specific path.
+- If neither variant reports, the natural allocation bytes were not shown to be uninitialized by this run. Do not label the result a confirmed disclosure on that evidence alone.
+- The check patch is diagnostic instrumentation for this lab, not a production fix.
 
-The KMSAN guest loads page_spray.ko and triggers its sysfs parameter immediately before the probe. The helper fills and releases order-0 pages with 0xA5 to increase the chance that nvmet's response SGL reuses those pages. The probe records aggregate tail statistics only; it does not write returned bytes to files or Actions artifacts.
+## Reachability and safety scope
 
-## KMSAN A/B interpretation
+The raw unprivileged protocol probe implements the NVMe/TCP handshake, Fabrics Connect, Property Set(CC), and Get Log Page directly over a TCP socket. It runs as `nobody`, with no effective capabilities, and contacts only the disposable loopback target. It demonstrates command acceptance in that test configuration; it does not establish that a production target accepts arbitrary host NQNs or is reachable by a remote attacker.
 
-- A KMSAN report whose stack includes nvmet TCP response functions on the unpatched kernel is direct evidence that uninitialized response bytes reached a use site.
-- The same signal disappearing after the tail-zeroing patch is evidence that the candidate fix addresses that path.
-- A non-zero or marker tail before the fix, absent after the fix, is also a useful runtime result.
-- No report and all-zero tails in both variants remain inconclusive. They do not prove the path is safe.
-
-KMSAN is diagnostic, not a proof by itself. The report stack and exact upstream Linux commit must be retained with the run output.
-
-
-## Raw unprivileged NVMe/TCP protocol test
-
-raw_tcp_probe.py implements the NVMe/TCP ICReq/ICResp handshake, Fabrics Connect,
-Property Set(CC), and Get Log Page directly over a TCP socket. The loopback
-runner invokes it as the unprivileged nobody account, against 127.0.0.1 only.
-It does not open /dev/nvme*, use an ioctl, or require CAP_SYS_ADMIN.
-
-This test is intended to answer a narrower reachability question: can an
-unprivileged local process speak the NVMe/TCP protocol and request an oversized
-Error Information Log from a target configured to accept the test host NQN?
-The disposable target has allow_any_host enabled only for this isolated test.
-It does not establish whether a production target allows arbitrary host NQNs,
-whether a network attacker can reach the port, or whether host authentication
-is disabled in a real deployment.
-
-A successful raw Connect and Get Log Page proves protocol-level command
-acceptance without the Linux host driver's admin ioctl permission gate. Tail
-bytes are summarized and never printed or saved.
+No production NVMe endpoint is contacted. The target namespace is a temporary 64 MiB RAM/loop-backed image. Raw response bytes are summarized and are not printed or saved.
