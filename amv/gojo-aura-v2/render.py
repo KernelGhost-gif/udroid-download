@@ -64,13 +64,13 @@ def select_dialogue(segments):
         t=s["text"].lower()
         return sum(5 for k in KEYWORDS if k.lower() in t) + min(len(t),40)/30 + max(0,1.2-(s["end"]-s["start"])) - abs(s["avg_logprob"])*0.1
     candidates=sorted(segments,key=lambda s:(s["end"]-s["start"]<=3.4, key_score(s)),reverse=True)
-    setup=next((s for s in candidates if 1.0 <= s["end"]-s["start"] <= 3.8),None)
+    setup=next((s for s in candidates if 1.0 <= s["end"]-s["start"] <= 3.65),None)
     punch_candidates=sorted(segments,key=key_score,reverse=True)
     punch=next((s for s in punch_candidates if s is not setup and 0.65 <= s["end"]-s["start"] <= 1.78),None)
     if setup is None:
-        setup=max(segments,key=lambda s:min(s["end"]-s["start"],3.8))
+        setup=max(segments,key=lambda s:min(s["end"]-s["start"],3.65))
     if punch is None:
-        punch=next((s for s in sorted(segments,key=lambda s:s["start"],reverse=True) if s is not setup and s["end"]-s["start"]<=2.8),None)
+        punch=next((s for s in sorted(segments,key=lambda s:s["start"],reverse=True) if s is not setup and s["end"]-s["start"]<=1.78),None)
     if punch is None or punch is setup:
         raise RuntimeError("Only one usable voice segment was found; cannot build a dialogue-to-punchline arc without inventing speech.")
     return setup,punch
@@ -380,8 +380,8 @@ def choose_shots(candidates, setup, punch, files_by_path):
         if pool:
             selected.append(pool.pop(0))
     for c in remaining:
-        if len(selected)>=12:break
-        if c not in selected and all(c["source"]!=u["source"] or abs(c["start"]-u["start"])>1.55 for u in selected):
+        if len(selected)>=13:break
+        if c not in selected and all(c["source"]!=u["source"] or abs(c["start"]-u["start"])>2.30 for u in selected):
             selected.append(c)
     if len(selected)<13:
         raise RuntimeError(f"Only {len(selected)} unique, Gojo-scored shots passed the frame/OCR filters; need 13 unique action shots. Repeated source windows are prohibited.")
@@ -394,7 +394,7 @@ def choose_shots(candidates, setup, punch, files_by_path):
     used={(s["source"],round(s["source_start"],1)) for s in shots}
     ending=sorted([c for c in candidates if (c["source"],round(c["start"],1)) not in used and all(c["source"]!=s["source"] or abs(c["start"]-s["source_start"])>2.30 for s in shots)],
                   key=lambda c:(c["gojo_score"]-0.9*c["motion"]+1.1*(c["blue"]+c["violet"])),reverse=True)
-    if not ending: ending=selected
+    if not ending: raise RuntimeError("No unique, clean Gojo ending shot remains after enforcing non-overlap; refusing to recycle a shot.")
     c=ending[0]
     add(21.28,DURATION,c["source"],c["start"],"final_hold",c)
     return shots
