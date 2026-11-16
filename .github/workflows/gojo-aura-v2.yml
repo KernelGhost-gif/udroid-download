@@ -50,7 +50,10 @@ jobs:
           curl --fail --location --retry 5 --retry-all-errors \
             --output inputs/REACTOR.mp3 \
             https://nolimitsphonk.com/assets/creators/reactor.mp3
-          yt-dlp --no-warnings --no-playlist --referer "https://www.bilibili.com/" \
+          yt-dlp --no-warnings --no-playlist --extractor-args "youtube:player_client=android" \
+            -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
+            -o "inputs/gojo_manga_pv.%(ext)s" https://www.youtube.com/watch?v=I0OVz4wt9ew \
+            || yt-dlp --no-warnings --no-playlist --referer "https://www.bilibili.com/" \
             -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
             -o "inputs/gojo_manga_pv.%(ext)s" https://www.bilibili.com/video/BV1Zi421X7qU/
           ls -lh inputs
