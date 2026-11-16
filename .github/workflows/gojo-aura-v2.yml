@@ -1,0 +1,81 @@
+name: Gojo Dialogue-to-Drop Aura V2
+
+on:
+  push:
+    branches:
+      - amv/gojo-dialogue-aura-v2-20261116
+    paths:
+      - ".github/workflows/gojo-aura-v2.yml"
+      - "amv/gojo-aura-v2/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gojo-aura-v2
+  cancel-in-progress: false
+
+jobs:
+  render:
+    name: Analyze dialogue, map beats, render and QA V2
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout temporary branch
+        uses: actions/checkout@v4
+
+      - name: Install media and OCR dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg ffprobe tesseract-ocr tesseract-ocr-jpn fonts-noto-cjk fonts-dejavu-core
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: amv/gojo-aura-v2/requirements.txt
+
+      - name: Install Python DSP, CV and speech packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r amv/gojo-aura-v2/requirements.txt
+
+      - name: Fetch licensed music and official Gojo source videos
+        working-directory: amv/gojo-aura-v2
+        run: |
+          mkdir -p inputs output
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output inputs/REACTOR.mp3 \
+            https://nolimitsphonk.com/assets/creators/reactor.mp3
+          yt-dlp --no-warnings --no-playlist --extractor-args "youtube:player_client=android,web" \
+            -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
+            -o "inputs/gojo_manga_pv.%(ext)s" https://www.youtube.com/watch?v=I0OVz4wt9ew
+          yt-dlp --no-warnings --no-playlist --extractor-args "youtube:player_client=android,web" \
+            -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
+            -o "inputs/gojo_character_trailer.%(ext)s" https://www.youtube.com/watch?v=8Qz477Ow1TA
+          ls -lh inputs
+          test -s inputs/REACTOR.mp3
+
+      - name: Render dialogue-led 3-act edit and QA artifacts
+        working-directory: amv/gojo-aura-v2
+        env:
+          HF_HOME: ${{ runner.temp }}/hf-cache
+          OMP_NUM_THREADS: "2"
+          OPENBLAS_NUM_THREADS: "2"
+        run: |
+          python render.py --input-dir inputs --output-dir output --duration 22.4
+          test -s output/Gojo_Satoru_Aura_Edit_V2.mp4
+          ffprobe -v error -show_streams -show_format -of json output/Gojo_Satoru_Aura_Edit_V2.mp4 > output/final_ffprobe.json
+          python verify.py output
+
+      - name: Upload complete V2 render and verification bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Gojo-Satoru-Aura-Edit-V2
+          path: amv/gojo-aura-v2/output/
+          if-no-files-found: warn
+          retention-days: 14
