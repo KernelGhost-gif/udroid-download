@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: gojo-aura-v2
+  group: gojo-aura-v2-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
