@@ -486,10 +486,10 @@ def build_manifest(outdir, shots, setup, punch, music_info, v1dur, v2dur):
     (outdir/"manifest.json").write_text(json.dumps(data,ensure_ascii=False,indent=2))
 
 def main():
+    global DURATION
     ap=argparse.ArgumentParser()
     ap.add_argument("--input-dir",required=True);ap.add_argument("--output-dir",required=True);ap.add_argument("--duration",type=float,default=DURATION)
     args=ap.parse_args()
-    global DURATION
     DURATION=float(args.duration)
     inp=Path(args.input_dir);out=Path(args.output_dir);out.mkdir(parents=True,exist_ok=True)
     music=inp/"REACTOR.mp3"
@@ -517,7 +517,7 @@ def main():
         "-filter:v","minterpolate=fps=60:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1,fade=t=out:st=21.35:d=1.05,format=yuv420p",
         "-map","0:v:0","-map","1:a:0","-c:v","libx264","-preset","slow","-crf","16","-r","60",
         "-c:a","aac","-b:a","320k","-t",f"{DURATION:.3f}","-movflags","+faststart",str(final)])
-    contact_sheets(final,out,audio_info["drop"]-audio_info["start"]+DROP_EDIT)
+    contact_sheets(final,out,DROP_EDIT)
     build_manifest(out,shots,setup,punch,audio_info,v1dur,v2dur)
     # Store a compact render report, the verifier performs strict stream/frame checks.
     (out/"render_report.json").write_text(json.dumps({
