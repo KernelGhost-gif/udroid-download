@@ -27,7 +27,7 @@ jobs:
       - name: Install media and OCR dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg ffprobe tesseract-ocr tesseract-ocr-jpn fonts-noto-cjk fonts-dejavu-core
+          sudo apt-get install -y ffmpeg tesseract-ocr tesseract-ocr-jpn fonts-noto-cjk fonts-dejavu-core
           ffmpeg -version
           ffprobe -version
 
