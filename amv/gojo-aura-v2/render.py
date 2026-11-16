@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy.signal import butter, sosfiltfilt, chirp
 from faster_whisper import WhisperModel
 
+FACE_CASCADE = cv2.CascadeClassifier(cv2.data.haarcascades+"haarcascade_frontalface_default.xml")
 FPS_BASE = 30
 FPS_FINAL = 60
 W, H = 1080, 1920
@@ -65,7 +66,7 @@ def select_dialogue(segments):
     candidates=sorted(segments,key=lambda s:(s["end"]-s["start"]<=3.4, key_score(s)),reverse=True)
     setup=next((s for s in candidates if 1.0 <= s["end"]-s["start"] <= 3.8),None)
     punch_candidates=sorted(segments,key=key_score,reverse=True)
-    punch=next((s for s in punch_candidates if s is not setup and 0.65 <= s["end"]-s["start"] <= 2.25),None)
+    punch=next((s for s in punch_candidates if s is not setup and 0.65 <= s["end"]-s["start"] <= 1.78),None)
     if setup is None:
         setup=max(segments,key=lambda s:min(s["end"]-s["start"],3.8))
     if punch is None:
@@ -203,15 +204,14 @@ def inspect_candidates(videos):
     candidates.sort(key=lambda c:c["score"]+0.3*c["gojo_score"],reverse=True)
     unique=[]
     for c in candidates:
-        if all(c["source"]!=u["source"] or abs(c["start"]-u["start"])>=1.55 for u in unique):
+        if all(c["source"]!=u["source"] or abs(c["start"]-u["start"])>=2.30 for u in unique):
             unique.append(c)
         if len(unique)>=36: break
     return unique
 
 def face_center(frame):
-    cascade=cv2.CascadeClassifier(cv2.data.haarcascades+"haarcascade_frontalface_default.xml")
     gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-    faces=cascade.detectMultiScale(gray,1.1,4,minSize=(32,32))
+    faces=FACE_CASCADE.detectMultiScale(gray,1.1,4,minSize=(32,32))
     if len(faces):
         x,y,w,h=max(faces,key=lambda f:f[2]*f[3])
         return x+w/2, y+h*0.42
@@ -372,7 +372,7 @@ def choose_shots(candidates, setup, punch, files_by_path):
         return max([("violet",c["violet"]),("blue",c["blue"]),("red",c["red"]),("motion",c["motion"]),("calm",c["whitehair"])],key=lambda x:x[1])[0]
     buckets=defaultdict(list)
     for c in remaining:buckets[cls(c)].append(c)
-    order=["violet","blue","red","motion","blue","violet","motion","calm","red","blue","calm"]
+    order=["violet","blue","red","motion","blue","violet","motion","calm","red","blue","calm","violet","blue"]
     selected=[]
     for k in order:
         pool=buckets[k]
@@ -383,8 +383,8 @@ def choose_shots(candidates, setup, punch, files_by_path):
         if len(selected)>=12:break
         if c not in selected and all(c["source"]!=u["source"] or abs(c["start"]-u["start"])>1.55 for u in selected):
             selected.append(c)
-    if len(selected)<10:
-        raise RuntimeError(f"Only {len(selected)} unique, Gojo-scored shots passed the frame/OCR filters; need at least 10 for the action section.")
+    if len(selected)<13:
+        raise RuntimeError(f"Only {len(selected)} unique, Gojo-scored shots passed the frame/OCR filters; need 13 unique action shots. Repeated source windows are prohibited.")
     # 11 action shots across 13.6 seconds; no section is left empty.
     bounds=[7.60,8.72,9.80,10.88,11.96,13.04,14.12,15.20,16.28,17.36,18.44,19.52,20.60,21.28]
     for i,(a,b) in enumerate(zip(bounds[:-1],bounds[1:])):
@@ -392,7 +392,7 @@ def choose_shots(candidates, setup, punch, files_by_path):
         add(a,b,c["source"],c["start"],"aura_action",c)
     # Iconic ending is the cleanest high-Gojo-score, low-motion candidate not previously used.
     used={(s["source"],round(s["source_start"],1)) for s in shots}
-    ending=sorted([c for c in candidates if (c["source"],round(c["start"],1)) not in used],
+    ending=sorted([c for c in candidates if (c["source"],round(c["start"],1)) not in used and all(c["source"]!=s["source"] or abs(c["start"]-s["source_start"])>2.30 for s in shots)],
                   key=lambda c:(c["gojo_score"]-0.9*c["motion"]+1.1*(c["blue"]+c["violet"])),reverse=True)
     if not ending: ending=selected
     c=ending[0]
@@ -481,7 +481,7 @@ def build_manifest(outdir, shots, setup, punch, music_info, v1dur, v2dur):
       "shots":shots,
       "qa_policy":{"kenjaku_prison_realm":"excluded by Gojo white-hair/energy visual whitelist and OCR; visual spot-check artifact supplied",
       "promo_text":"OCR rejection for DOMAIN/INFINITE/VOID/IMAX/date cards",
-      "shot_reuse":"unique sampled source windows; >=1.55 s separation within source"}
+      "shot_reuse":"13 unique action windows plus a unique ending; >=2.30 s separation within source"}
     }
     (outdir/"manifest.json").write_text(json.dumps(data,ensure_ascii=False,indent=2))
 
