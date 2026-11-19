@@ -133,7 +133,7 @@ QEMU_ARGS=(
   -initrd "$INITRD"
   -append "console=ttyS0,115200 rdinit=/init loglevel=8 kasan_multi_shot=1 panic_on_warn=0 virtio_pci_ci_fail_restore_find_vqs=1 ci_driver=$DRIVER"
   -display none
-  -serial "file:$LOG"
+  -serial stdio
   -monitor none
   -qmp "unix:$QMP,server=on,wait=off"
   -no-reboot
@@ -168,7 +168,7 @@ case "$TARGET" in
 esac
 
 echo "Starting QEMU target=$TARGET driver=$DRIVER model=$MODEL"
-"$QEMU" "${QEMU_ARGS[@]}" > "$WORK/qemu.stderr" 2>&1 &
+"$QEMU" "${QEMU_ARGS[@]}" > "$LOG" 2> "$WORK/qemu.stderr" &
 QEMU_PID=$!
 cleanup() {
   set +e
@@ -255,6 +255,7 @@ try:
     execute("qmp_capabilities")
     saw_sleep = False
     wake_sent = False
+    last_status = None
     while time.monotonic() < deadline:
         try:
             with open(serial_log, "r", errors="replace") as f:
@@ -268,7 +269,9 @@ try:
         if "GUEST_SLEEP_BEGIN" in log:
             saw_sleep = True
             status = execute("query-status").get("status", "unknown")
-            print("QMP_VM_STATUS=" + str(status))
+            if status != last_status:
+                print("QMP_VM_STATUS=" + str(status))
+                last_status = status
             # system_wakeup is valid only after QEMU has entered S3.
             # Sending it while the guest is still running makes QMP fail.
             if status == "suspended" and not wake_sent:
