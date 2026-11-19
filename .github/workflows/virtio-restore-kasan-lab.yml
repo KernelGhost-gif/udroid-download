@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: udroid-virtio-restore-kasan-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-kasan-kernel:
@@ -99,13 +99,17 @@ jobs:
       - name: Build KASAN kernel
         run: make -C linux ARCH=x86_64 -j3 bzImage
 
+      - name: Stage KASAN kernel artifact
+        run: |
+          mkdir -p "$RUNNER_TEMP/virtio-kasan-artifact"
+          cp linux/arch/x86/boot/bzImage "$RUNNER_TEMP/virtio-kasan-artifact/bzImage"
+          cp linux/.config "$RUNNER_TEMP/virtio-kasan-artifact/config"
+
       - name: Upload KASAN kernel
         uses: actions/upload-artifact@v4
         with:
           name: virtio-kasan-bzimage
-          path: |
-            linux/arch/x86/boot/bzImage
-            linux/.config
+          path: ${{ runner.temp }}/virtio-kasan-artifact
           if-no-files-found: error
           retention-days: 3
 
