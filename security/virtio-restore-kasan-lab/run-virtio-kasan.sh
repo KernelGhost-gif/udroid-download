@@ -168,7 +168,7 @@ case "$TARGET" in
 esac
 
 echo "Starting QEMU target=$TARGET driver=$DRIVER model=$MODEL"
-"$QEMU" "$$QEMU_ARGS[@]}" > "$WORK/qemu.stderr" 2>&1 &
+"$QEMU" "${QEMU_ARGS[@]}" > "$WORK/qemu.stderr" 2>&1 &
 QEMU_PID=$!
 cleanup() {
   set +e
