@@ -261,7 +261,9 @@ try:
                 log = f.read()
         except FileNotFoundError:
             log = ""
-        if "GUEST_DONE" in log:
+        if "GUEST_DONE" in log or any(marker in log for marker in (
+            "BUG: KASAN:", "Oops:", "BUG: unable to handle", "Kernel panic"
+        )):
             break
         if "GUEST_SLEEP_BEGIN" in log:
             saw_sleep = True
@@ -284,8 +286,12 @@ finally:
     sock.close()
 QMP_WAKE
 
+FAULT_PATTERN='BUG: KASAN:|Oops:|BUG: unable to handle|Kernel panic'
 for _ in $(seq 1 240); do
   if grep -q "GUEST_DONE" "$LOG" 2>/dev/null; then
+    break
+  fi
+  if grep -Eq "$FAULT_PATTERN" "$LOG" 2>/dev/null; then
     break
   fi
   if ! kill -0 "$QEMU_PID" 2>/dev/null; then
@@ -294,12 +300,28 @@ for _ in $(seq 1 240); do
   sleep 1
 done
 
-if kill -0 "$QEMU_PID" 2>/dev/null; then
+if grep -q "GUEST_DONE" "$LOG" 2>/dev/null; then
+  # A successful guest poweroff halts the VM but does not terminate QEMU.
+  # Stop the host process after the guest has flushed its final serial output.
+  sleep 1
+  kill -TERM "$QEMU_PID" 2>/dev/null || true
+  wait "$QEMU_PID" 2>/dev/null || true
+  trap - EXIT
+elif grep -Eq "$FAULT_PATTERN" "$LOG" 2>/dev/null; then
+  kill -TERM "$QEMU_PID" 2>/dev/null || true
+  wait "$QEMU_PID" 2>/dev/null || true
+  trap - EXIT
+  echo "KERNEL_FAULT_REPRODUCED target=$TARGET"
+  cat "$WORK/qemu.stderr" || true
+  cat "$LOG"
+  exit 2
+elif kill -0 "$QEMU_PID" 2>/dev/null; then
   echo "QEMU_TIMEOUT=guest_did_not_finish"
   exit 1
+else
+  wait "$QEMU_PID" || true
+  trap - EXIT
 fi
-wait "$QEMU_PID" || true
-trap - EXIT
 cat "$WORK/qemu.stderr" || true
 cat "$LOG"
 
