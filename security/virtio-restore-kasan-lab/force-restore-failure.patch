@@ -1,0 +1,67 @@
+diff --git a/drivers/virtio/virtio_pci_common.h b/drivers/virtio/virtio_pci_common.h
+index 000000000000..000000000000 100644
+--- a/drivers/virtio/virtio_pci_common.h
++++ b/drivers/virtio/virtio_pci_common.h
+@@ -83,6 +83,9 @@ struct virtio_pci_device {
+ struct virtio_device vdev;
+ struct pci_dev *pci_dev;
++	/* CI-only: count find_vqs calls for failed-restore lifetime tests. */
++	unsigned int ci_test_find_vqs_calls;
++
+ union {
+ 		struct virtio_pci_legacy_device ldev;
+ 		struct virtio_pci_modern_device mdev;
+diff --git a/drivers/virtio/virtio_pci_modern.c b/drivers/virtio/virtio_pci_modern.c
+index 000000000000..000000000000 100644
+--- a/drivers/virtio/virtio_pci_modern.c
++++ b/drivers/virtio/virtio_pci_modern.c
+@@ -16,9 +16,25 @@
+ 
+ #include <linux/delay.h>
++#include <linux/init.h>
++#include <linux/kernel.h>
+ #include <linux/virtio_pci_admin.h>
+ #define VIRTIO_PCI_NO_LEGACY
+ #define VIRTIO_RING_NO_LEGACY
+ #include "virtio_pci_common.h"
+ 
++/*
++ * This boot parameter is used only by the isolated CI KASAN lab.
++ * Allow the initial probe, then fail the next find_vqs() for each device
++ * to drive the driver's restore error path after its queues were frozen.
++ */
++static bool virtio_pci_ci_fail_restore_find_vqs;
++
++static int __init virtio_pci_ci_fail_restore_setup(char *str)
++{
++	if (str && !strcmp(str, "1")) {
++		virtio_pci_ci_fail_restore_find_vqs = true;
++		return 1;
++	}
++	return 0;
++}
++__setup("virtio_pci_ci_fail_restore_find_vqs=",
++	virtio_pci_ci_fail_restore_setup);
++
+ #define VIRTIO_AVQ_SGS_MAX	4
+ 
+ static void vp_get_features(struct virtio_device *vdev, u64 *features)
+@@ -745,8 +761,15 @@ static int vp_modern_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
+ 			      struct irq_affinity *desc)
+ {
+ 	struct virtio_pci_device *vp_dev = to_vp_device(vdev);
+ 	struct virtqueue *vq;
+-	int rc = vp_find_vqs(vdev, nvqs, vqs, vqs_info, desc);
++	int rc;
++
++	if (virtio_pci_ci_fail_restore_find_vqs &&
++	    vp_dev->ci_test_find_vqs_calls++) {
++		dev_warn(&vdev->dev,
++			 "VIRTIO_RESTORE_KASAN_TEST_FAIL: injected -ENOMEM from find_vqs\n");
++		return -ENOMEM;
++	}
++
++	rc = vp_find_vqs(vdev, nvqs, vqs, vqs_info, desc);
+ 
+ 	if (rc)
+ 		return rc;
