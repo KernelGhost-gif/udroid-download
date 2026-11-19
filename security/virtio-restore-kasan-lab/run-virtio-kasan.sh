@@ -107,8 +107,8 @@ if dmesg | grep -q "VIRTIO_RESTORE_KASAN_TEST_FAIL"; then
 else
   echo GUEST_RESTORE_FAILURE_NOT_OBSERVED
 fi
-if dmesg | grep -q "BUG: KASAN:.*use-after-free"; then
-  echo KASAN_REPRODUCED
+if dmesg | grep -Eq 'BUG: KASAN:|Oops:|BUG: unable to handle|Kernel panic'; then
+  echo KERNEL_FAULT_REPRODUCED
 else
   echo RESTORE_FAILURE_INJECTED_NO_KASAN_REPORT
 fi
@@ -254,7 +254,7 @@ try:
         raise RuntimeError("QMP greeting missing")
     execute("qmp_capabilities")
     saw_sleep = False
-    wake_count = 0
+    wake_sent = False
     while time.monotonic() < deadline:
         try:
             with open(serial_log, "r", errors="replace") as f:
@@ -267,18 +267,18 @@ try:
             saw_sleep = True
             status = execute("query-status").get("status", "unknown")
             print("QMP_VM_STATUS=" + str(status))
-            if status in ("suspended", "paused") or wake_count == 0:
+            # system_wakeup is valid only after QEMU has entered S3.
+            # Sending it while the guest is still running makes QMP fail.
+            if status == "suspended" and not wake_sent:
                 execute("system_wakeup")
-                wake_count += 1
+                wake_sent = True
                 print("QMP_SYSTEM_WAKEUP_SENT")
-            elif wake_count < 4:
-                time.sleep(2)
-                execute("system_wakeup")
-                wake_count += 1
-                print("QMP_SYSTEM_WAKEUP_RETRY")
         time.sleep(0.5)
     if not saw_sleep:
         print("QMP_ERROR=guest_never_requested_sleep")
+        sys.exit(1)
+    if not wake_sent and "GUEST_DONE" not in log:
+        print("QMP_ERROR=guest_never_reached_suspended_state")
         sys.exit(1)
 finally:
     sock.close()
@@ -311,8 +311,9 @@ if ! grep -q "GUEST_DONE" "$LOG"; then
   echo "INCONCLUSIVE: guest did not complete"
   exit 1
 fi
-if grep -q "KASAN_REPRODUCED" "$LOG"; then
-  echo "KASAN_REPRODUCED target=$TARGET"
+if grep -q "KERNEL_FAULT_REPRODUCED" "$LOG"; then
+  echo "KERNEL_FAULT_REPRODUCED target=$TARGET"
+  exit 2
 elif grep -q "GUEST_RESTORE_FAILURE_INJECTED" "$LOG"; then
   echo "RESTORE_FAILURE_INJECTED_NO_KASAN_REPORT target=$TARGET"
 else
