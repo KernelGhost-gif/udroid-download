@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - ci/virtio-restore-kasan-lab-20261119
+      - fix/virtio-restore-cleanup-20261119
 
 permissions:
   contents: read
@@ -44,6 +45,15 @@ jobs:
           grep -q 'VIRTIO_RESTORE_KASAN_TEST_FAIL' linux/drivers/virtio/virtio_pci_modern.c
           grep -q 'VIRTIO_RESTORE_KASAN_TEST_FORCE_FREEZE' linux/drivers/virtio/virtio_pci_common.c
           grep -q 'VIRTIO_RESTORE_KASAN_TEST_FORCE_RESTORE' linux/drivers/virtio/virtio_pci_common.c
+
+      - name: Apply failed-restore driver fixes
+        run: |
+          python3 security/virtio-restore-kasan-lab/apply-driver-fixes.py linux
+          git -C linux diff --check
+          grep -q 'snd->queues\[i\].vqueue = NULL' linux/sound/virtio/virtio_card.c
+          grep -q 'vi->data_vq = NULL' linux/drivers/crypto/virtio/virtio_crypto_core.c
+          grep -q 'portdev->in_vqs = NULL' linux/drivers/char/virtio_console.c
+          grep -q 'cpu_notif_registered' linux/drivers/net/virtio_net.c
 
       - name: Configure KASAN, ACPI suspend, and affected drivers
         run: |
