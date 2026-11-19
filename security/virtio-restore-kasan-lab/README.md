@@ -9,7 +9,7 @@ This is an isolated CI experiment for the source-level stale-virtqueue lifetime 
 3. After resume, the guest unbinds the affected virtio driver. This reaches its remove path after queues were deleted by freeze and restore failed.
 4. Captures serial output and checks for a KASAN use-after-free report.
 
-The patch is applied only to the temporary Linux checkout inside the GitHub Actions runner. It does not change the upstream Linux repository or any production kernel. Every test runs in a disposable QEMU guest with TCG emulation and a synthetic virtio-PCI device.
+The test-only source transformation is applied only to the temporary Linux checkout inside the GitHub Actions runner. It asserts each exact upstream anchor occurs once before writing the modified file. It does not change the upstream Linux repository or any production kernel. Every test runs in a disposable QEMU guest with TCG emulation and a synthetic virtio-PCI device.
 
 ## Covered driver/device pairs
 
