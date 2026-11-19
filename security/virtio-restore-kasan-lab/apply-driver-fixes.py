@@ -616,6 +616,109 @@ out:
         "virtio-net-stats-empty-queue-exit",
     )
 
+    # virtio-input: avoid calling del_vqs twice when remove follows freeze
+    # and restore failed before virtinput_init_vqs() replaced the pointers.
+    replace_once(
+        root,
+        "drivers/virtio/virtio_input.c",
+        """\tif (vi->sts)
+\t\twhile ((buf = virtqueue_detach_unused_buf(vi->sts)) != NULL)
+\t\t\tkfree(buf);
+\tvdev->config->del_vqs(vdev);
+\tkfree(vi);""",
+        """\tif (vi->sts)
+\t\twhile ((buf = virtqueue_detach_unused_buf(vi->sts)) != NULL)
+\t\t\tkfree(buf);
+\tif (vi->evt || vi->sts)
+\t\tvdev->config->del_vqs(vdev);
+\tkfree(vi);""",
+        "virtio-input-remove-skips-duplicate-del-vqs",
+    )
+
+    # virtio-gpu: do not reset/reclaim/delete queues a second time after
+    # freeze has already destroyed them and restore failed before recreating.
+    replace_once(
+        root,
+        "drivers/gpu/drm/virtio/virtgpu_kms.c",
+        """\tvirtio_reset_device(vgdev->vdev);
+\tvirtio_gpu_reclaim_vbufs(vgdev);
+\tvgdev->vdev->config->del_vqs(vgdev->vdev);
+\tmutex_destroy(&vgdev->obj_restore_lock);""",
+        """\tif (vgdev->ctrlq.vq || vgdev->cursorq.vq) {
+\t\tvirtio_reset_device(vgdev->vdev);
+\t\tvirtio_gpu_reclaim_vbufs(vgdev);
+\t\tvgdev->vdev->config->del_vqs(vgdev->vdev);
+\t\tvgdev->ctrlq.vq = NULL;
+\t\tvgdev->cursorq.vq = NULL;
+\t}
+\tmutex_destroy(&vgdev->obj_restore_lock);""",
+        "virtio-gpu-deinit-skips-deleted-vqs",
+    )
+
+    # virtio-net: queue arrays can be gone while the netdev is still
+    # registered after a failed restore. Track whether the transport actually
+    # owns live queues so final remove does not call del_vqs a second time.
+    replace_once(
+        root,
+        "drivers/net/virtio_net.c",
+        """\t/* CPU hotplug instances for online & dead */
+\tstruct hlist_node node;
+\tstruct hlist_node node_dead;
+\tbool cpu_notif_registered;""",
+        """\t/* CPU hotplug instances for online & dead */
+\tstruct hlist_node node;
+\tstruct hlist_node node_dead;
+\tbool cpu_notif_registered;
+\tbool vqs_initialized;""",
+        "virtio-net-vqs-initialized-state-field",
+    )
+    replace_once(
+        root,
+        "drivers/net/virtio_net.c",
+        """\tfor (i = 0; i < vi->max_queue_pairs; i++) {
+\t\tvi->rq[i].vq = vqs[rxq2vq(i)];
+\t\tvi->rq[i].min_buf_len = mergeable_min_buf_len(vi, vi->rq[i].vq);
+\t\tvi->sq[i].vq = vqs[txq2vq(i)];
+\t}
+\t/* run here: ret == 0. */""",
+        """\tfor (i = 0; i < vi->max_queue_pairs; i++) {
+\t\tvi->rq[i].vq = vqs[rxq2vq(i)];
+\t\tvi->rq[i].min_buf_len = mergeable_min_buf_len(vi, vi->rq[i].vq);
+\t\tvi->sq[i].vq = vqs[txq2vq(i)];
+\t}
+\tvi->vqs_initialized = true;
+\t/* run here: ret == 0. */""",
+        "virtio-net-mark-vqs-live-after-successful-find",
+    )
+    replace_once(
+        root,
+        "drivers/net/virtio_net.c",
+        """static void virtnet_del_vqs(struct virtnet_info *vi)
+{
+\tstruct virtio_device *vdev = vi->vdev;
+
+\tvirtnet_clean_affinity(vi);
+
+\tvdev->config->del_vqs(vdev);
+
+\tvirtnet_free_queues(vi);
+}""",
+        """static void virtnet_del_vqs(struct virtnet_info *vi)
+{
+\tstruct virtio_device *vdev = vi->vdev;
+
+\tvirtnet_clean_affinity(vi);
+
+\tif (vi->vqs_initialized) {
+\t\tvdev->config->del_vqs(vdev);
+\t\tvi->vqs_initialized = false;
+\t}
+
+\tvirtnet_free_queues(vi);
+}""",
+        "virtio-net-del-only-live-vqs",
+    )
+
     print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied")
     return 0
 
