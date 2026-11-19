@@ -7,7 +7,7 @@ diff --git a/drivers/virtio/virtio_pci_modern.c b/drivers/virtio/virtio_pci_mode
 +#include <linux/kernel.h>
 +#include <linux/string.h>
  #include <linux/virtio_pci_admin.h>
-@@ -23,1 +26,20 @@
+@@ -23,1 +23,19 @@
  #include "virtio_pci_common.h"
 +
 +/*
@@ -27,7 +27,7 @@ diff --git a/drivers/virtio/virtio_pci_modern.c b/drivers/virtio/virtio_pci_mode
 +}
 +__setup("virtio_pci_ci_fail_restore_find_vqs=",
 +	virtio_pci_ci_fail_restore_setup);
-@@ -753,1 +772,10 @@
+@@ -753,1 +774,10 @@
 -	int rc = vp_find_vqs(vdev, nvqs, vqs, vqs_info, desc);
 +	int rc;
 +
