@@ -490,7 +490,133 @@ err_ctrl:
         "virtio-net-destroy-page-pools-null-guard",
     )
 
-    print("DRIVER_FIX_RESULT=all-four-driver-overlays-applied")
+    # virtio-input: failed restore leaves the pre-freeze queue handles stale.
+    # Clear them after del_vqs(), and do not detach buffers through a dead queue.
+    replace_once(
+        root,
+        "drivers/virtio/virtio_input.c",
+        """\tvirtio_reset_device(vdev);
+\tinput_unregister_device(vi->idev);
+\twhile ((buf = virtqueue_detach_unused_buf(vi->sts)) != NULL)
+\t\tkfree(buf);
+\tvdev->config->del_vqs(vdev);
+\tkfree(vi);""",
+        """\tvirtio_reset_device(vdev);
+\tinput_unregister_device(vi->idev);
+\tif (vi->sts)
+\t\twhile ((buf = virtqueue_detach_unused_buf(vi->sts)) != NULL)
+\t\t\tkfree(buf);
+\tvdev->config->del_vqs(vdev);
+\tkfree(vi);""",
+        "virtio-input-remove-only-detaches-live-status-queue",
+    )
+    replace_once(
+        root,
+        "drivers/virtio/virtio_input.c",
+        """\twhile ((buf = virtqueue_detach_unused_buf(vi->sts)) != NULL)
+\t\tkfree(buf);
+\tvdev->config->del_vqs(vdev);
+\treturn 0;""",
+        """\twhile ((buf = virtqueue_detach_unused_buf(vi->sts)) != NULL)
+\t\tkfree(buf);
+\tvdev->config->del_vqs(vdev);
+\tvi->evt = NULL;
+\tvi->sts = NULL;
+\treturn 0;""",
+        "virtio-input-clear-queue-pointers-after-freeze",
+    )
+
+    # virtio-gpu: teardown must not reclaim buffers through queue objects
+    # already destroyed by the PCI freeze path.
+    replace_once(
+        root,
+        "drivers/gpu/drm/virtio/virtgpu_vq.c",
+        """\twhile ((vbuf = virtqueue_detach_unused_buf(vgdev->ctrlq.vq))) {
+\t\tif (vbuf->objs)
+\t\t\tvirtio_gpu_array_put_free(vbuf->objs);
+\t\tif (vbuf->resp_cb_data)
+\t\t\tvirtio_gpu_cleanup_object(vbuf->resp_cb_data);
+\t\tfree_vbuf(vgdev, vbuf);
+\t}
+\twhile ((vbuf = virtqueue_detach_unused_buf(vgdev->cursorq.vq)))
+\t\tfree_vbuf(vgdev, vbuf);""",
+        """\tif (vgdev->ctrlq.vq) {
+\t\twhile ((vbuf = virtqueue_detach_unused_buf(vgdev->ctrlq.vq))) {
+\t\t\tif (vbuf->objs)
+\t\t\t\tvirtio_gpu_array_put_free(vbuf->objs);
+\t\t\tif (vbuf->resp_cb_data)
+\t\t\t\tvirtio_gpu_cleanup_object(vbuf->resp_cb_data);
+\t\t\tfree_vbuf(vgdev, vbuf);
+\t\t}
+\t}
+\tif (vgdev->cursorq.vq) {
+\t\twhile ((vbuf = virtqueue_detach_unused_buf(vgdev->cursorq.vq)))
+\t\t\tfree_vbuf(vgdev, vbuf);
+\t}""",
+        "virtio-gpu-reclaim-only-live-queues",
+    )
+    replace_once(
+        root,
+        "drivers/gpu/drm/virtio/virtgpu_drv.c",
+        """\tvirtio_reset_device(vdev);
+\tvdev->config->del_vqs(vdev);
+
+\treturn 0;
+
+err_resume:""",
+        """\tvirtio_reset_device(vdev);
+\tvdev->config->del_vqs(vdev);
+\tvgdev->ctrlq.vq = NULL;
+\tvgdev->cursorq.vq = NULL;
+
+\treturn 0;
+
+err_resume:""",
+        "virtio-gpu-clear-queue-pointers-after-freeze",
+    )
+
+    # virtio-net: rtnetlink may query stats while unregister_netdev() runs
+    # after a failed restore has already destroyed the RX/TX queue arrays.
+    replace_once(
+        root,
+        "drivers/net/virtio_net.c",
+        """static void virtnet_stats(struct net_device *dev,
+\t\t\t  struct rtnl_link_stats64 *tot)
+{
+\tstruct virtnet_info *vi = netdev_priv(dev);
+\tunsigned int start;
+\tint i;
+
+\tfor (i = 0; i < vi->max_queue_pairs; i++) {""",
+        """static void virtnet_stats(struct net_device *dev,
+\t\t\t  struct rtnl_link_stats64 *tot)
+{
+\tstruct virtnet_info *vi = netdev_priv(dev);
+\tunsigned int start;
+\tint i;
+
+\tif (unlikely(!vi->rq || !vi->sq))
+\t\tgoto out;
+
+\tfor (i = 0; i < vi->max_queue_pairs; i++) {""",
+        "virtio-net-stats-guard-after-failed-restore",
+    )
+    replace_once(
+        root,
+        "drivers/net/virtio_net.c",
+        """\t\ttot->tx_errors  += terrors;
+\t}
+
+\ttot->tx_dropped = DEV_STATS_READ(dev, tx_dropped);""",
+        """\t\ttot->tx_errors  += terrors;
+\t}
+
+out:
+\ttot->tx_dropped = DEV_STATS_READ(dev, tx_dropped);""",
+        "virtio-net-stats-empty-queue-exit",
+    )
+
+    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied")
     return 0
 
 
