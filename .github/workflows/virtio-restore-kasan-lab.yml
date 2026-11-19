@@ -55,8 +55,11 @@ jobs:
           grep -q 'portdev->in_vqs = NULL' linux/drivers/char/virtio_console.c
           grep -q 'cpu_notif_registered' linux/drivers/net/virtio_net.c
           grep -q 'vi->sts = NULL' linux/drivers/virtio/virtio_input.c
+          grep -q 'if (vi->evt || vi->sts)' linux/drivers/virtio/virtio_input.c
           grep -q 'vgdev->ctrlq.vq = NULL' linux/drivers/gpu/drm/virtio/virtgpu_drv.c
+          grep -q 'vgdev->ctrlq.vq || vgdev->cursorq.vq' linux/drivers/gpu/drm/virtio/virtgpu_kms.c
           grep -q 'unlikely(!vi->rq || !vi->sq)' linux/drivers/net/virtio_net.c
+          grep -q 'vqs_initialized' linux/drivers/net/virtio_net.c
 
       - name: Export production driver patch
         run: |
@@ -67,6 +70,10 @@ jobs:
             drivers/crypto/virtio/virtio_crypto_core.c \
             drivers/char/virtio_console.c \
             drivers/net/virtio_net.c \
+            drivers/virtio/virtio_input.c \
+            drivers/gpu/drm/virtio/virtgpu_drv.c \
+            drivers/gpu/drm/virtio/virtgpu_kms.c \
+            drivers/gpu/drm/virtio/virtgpu_vq.c \
             > "$RUNNER_TEMP/virtio-driver-fixes/virtio-failed-restore-fixes.patch"
           test -s "$RUNNER_TEMP/virtio-driver-fixes/virtio-failed-restore-fixes.patch"
 
@@ -213,11 +220,16 @@ jobs:
             exit 0
           fi
           if [ "$result" -ne 0 ]; then
-            echo "result=inconclusive-or-failed" >> "$GITHUB_OUTPUT"
+            if grep -q 'KERNEL_FAULT_REPRODUCED' "${{ runner.temp }}/${{ matrix.target }}-runner.log"; then
+              echo "result=reproduced" >> "$GITHUB_OUTPUT"
+            else
+              echo "result=inconclusive-or-failed" >> "$GITHUB_OUTPUT"
+            fi
             exit "$result"
           fi
-          if grep -q 'KASAN_REPRODUCED' "${{ runner.temp }}/${{ matrix.target }}-runner.log"; then
+          if grep -q 'KERNEL_FAULT_REPRODUCED' "${{ runner.temp }}/${{ matrix.target }}-runner.log"; then
             echo "result=reproduced" >> "$GITHUB_OUTPUT"
+            exit 1
           elif grep -q 'RESTORE_FAILURE_INJECTED_NO_KASAN_REPORT' "${{ runner.temp }}/${{ matrix.target }}-runner.log"; then
             echo "result=no-report" >> "$GITHUB_OUTPUT"
           else
