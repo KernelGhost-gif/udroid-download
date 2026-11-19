@@ -39,9 +39,7 @@ jobs:
 
       - name: Validate and apply CI-only restore failure injection
         run: |
-          PATCH="$GITHUB_WORKSPACE/security/virtio-restore-kasan-lab/force-restore-failure.patch"
-          git -C linux apply --check --verbose "$PATCH"
-          git -C linux apply --verbose "$PATCH"
+          python3 security/virtio-restore-kasan-lab/apply-restore-failure.py linux
           git -C linux diff --check
           grep -q 'VIRTIO_RESTORE_KASAN_TEST_FAIL' linux/drivers/virtio/virtio_pci_modern.c
 
