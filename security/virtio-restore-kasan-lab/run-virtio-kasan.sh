@@ -34,7 +34,7 @@ rm -rf "$WORK"
 mkdir -p "$ROOT"/bin "$ROOT"/sbin "$ROOT"/proc "$ROOT"/sys \
   "$ROOT"/dev "$ROOT"/tmp "$ROOT"/run
 cp "$BUSYBOX" "$ROOT/bin/busybox"
-for applet in sh mount mkdir rm ln echo cat sleep poweroff dmesg grep readlink basename; do
+for applet in sh mount mkdir rm ln echo cat sleep poweroff dmesg grep readlink basename cut; do
   ln -s /bin/busybox "$ROOT/bin/$applet"
 done
 mknod -m 600 "$ROOT/dev/console" c 5 1
