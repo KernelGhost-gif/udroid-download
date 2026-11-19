@@ -183,7 +183,8 @@ def main() -> int:
 \t\treturn;
 \t}
 \tif (!port->in_vq) {
-\t\tfree_buf(port->inbuf, false);
+\t\tif (port->inbuf)
+\t\t\tfree_buf(port->inbuf, false);
 \t\tport->inbuf = NULL;
 \t\treturn;
 \t}
