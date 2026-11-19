@@ -1,0 +1,198 @@
+name: Virtio failed-restore KASAN lab
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches:
+      - ci/virtio-restore-kasan-lab-20261119
+
+permissions:
+  contents: read
+
+concurrency:
+  group: udroid-virtio-restore-kasan-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-kasan-kernel:
+    name: Build pinned KASAN test kernel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Check out CI harness
+        uses: actions/checkout@v4
+
+      - name: Check out pinned upstream Linux
+        uses: actions/checkout@v4
+        with:
+          repository: torvalds/linux
+          ref: 20eef29b7c8465ac98d7dd6d6f2ac07a8d8056ca
+          path: linux
+          fetch-depth: 1
+
+      - name: Install kernel build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential flex bison bc libelf-dev libssl-dev dwarves \
+            python3
+
+      - name: Validate and apply CI-only restore failure injection
+        run: |
+          PATCH="$GITHUB_WORKSPACE/security/virtio-restore-kasan-lab/force-restore-failure.patch"
+          git -C linux apply --check --verbose "$PATCH"
+          git -C linux apply --verbose "$PATCH"
+          git -C linux diff --check
+          grep -q 'VIRTIO_RESTORE_KASAN_TEST_FAIL' linux/drivers/virtio/virtio_pci_modern.c
+
+      - name: Configure KASAN, ACPI suspend, and affected drivers
+        run: |
+          make -C linux ARCH=x86_64 x86_64_defconfig
+          linux/scripts/config --file linux/.config \
+            --enable DEBUG_KERNEL \
+            --enable KASAN \
+            --enable KASAN_GENERIC \
+            --enable FRAME_POINTER \
+            --enable KALLSYMS \
+            --enable KALLSYMS_ALL \
+            --enable PM \
+            --enable SUSPEND \
+            --enable ACPI \
+            --enable ACPI_SLEEP \
+            --enable MODULES \
+            --enable PCI \
+            --enable VIRTIO \
+            --enable VIRTIO_PCI \
+            --disable VIRTIO_PCI_LEGACY \
+            --enable INPUT \
+            --enable VIRTIO_INPUT \
+            --enable VIRTIO_CONSOLE \
+            --enable VIRTIO_NET \
+            --enable SND \
+            --enable SND_VIRTIO \
+            --enable CRYPTO_DEV_VIRTIO \
+            --enable CAN \
+            --enable CAN_VIRTIO_CAN \
+            --enable DRM \
+            --enable DRM_VIRTIO_GPU \
+            --enable DEVTMPFS \
+            --enable DEVTMPFS_MOUNT \
+            --enable SERIAL_8250 \
+            --enable SERIAL_8250_CONSOLE
+          make -C linux ARCH=x86_64 olddefconfig
+
+          grep -E '^(CONFIG_(KASAN|KASAN_GENERIC|SUSPEND|ACPI_SLEEP|VIRTIO_PCI|VIRTIO_INPUT|VIRTIO_CONSOLE|VIRTIO_NET|SND_VIRTIO|CRYPTO_DEV_VIRTIO|CAN_VIRTIO_CAN|DRM_VIRTIO_GPU))=' linux/.config
+          grep -q '^CONFIG_KASAN=y$' linux/.config
+          grep -q '^CONFIG_SUSPEND=y$' linux/.config
+          grep -q '^CONFIG_ACPI_SLEEP=y$' linux/.config
+          grep -q '^CONFIG_VIRTIO_PCI=y$' linux/.config
+          grep -q '^CONFIG_VIRTIO_INPUT=y$' linux/.config
+          grep -q '^CONFIG_VIRTIO_CONSOLE=y$' linux/.config
+          grep -q '^CONFIG_VIRTIO_NET=y$' linux/.config
+          grep -q '^CONFIG_SND_VIRTIO=y$' linux/.config
+          grep -q '^CONFIG_CRYPTO_DEV_VIRTIO=y$' linux/.config
+          grep -q '^CONFIG_CAN_VIRTIO_CAN=y$' linux/.config
+          grep -q '^CONFIG_DRM_VIRTIO_GPU=y$' linux/.config
+
+      - name: Build KASAN kernel
+        run: make -C linux ARCH=x86_64 -j3 bzImage
+
+      - name: Upload KASAN kernel
+        uses: actions/upload-artifact@v4
+        with:
+          name: virtio-kasan-bzimage
+          path: |
+            linux/arch/x86/boot/bzImage
+            linux/.config
+          if-no-files-found: error
+          retention-days: 3
+
+  qemu-kasan-matrix:
+    name: KASAN restore/unbind test - ${{ matrix.target }}
+    needs: build-kasan-kernel
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - target: virtio-input
+            driver: virtio_input
+            model: virtio-keyboard-pci
+          - target: virtio-net
+            driver: virtio_net
+            model: virtio-net-pci
+          - target: virtio-snd
+            driver: virtio_snd
+            model: virtio-sound-pci
+          - target: virtio-console
+            driver: virtio_console
+            model: virtio-serial-pci
+          - target: virtio-gpu
+            driver: virtio_gpu
+            model: virtio-gpu-pci
+          - target: virtio-crypto
+            driver: virtio_crypto
+            model: virtio-crypto-pci
+          - target: virtio-can
+            driver: virtio_can
+            model: virtio-can-pci
+
+    steps:
+      - name: Check out CI harness
+        uses: actions/checkout@v4
+
+      - name: Download KASAN kernel
+        uses: actions/download-artifact@v4
+        with:
+          name: virtio-kasan-bzimage
+          path: ${{ runner.temp }}/virtio-kasan
+
+      - name: Install QEMU and static guest utilities
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 busybox-static cpio gzip python3
+
+      - name: Run failed-restore and remove-path test
+        id: test
+        shell: bash
+        run: |
+          set +e
+          sudo bash security/virtio-restore-kasan-lab/run-virtio-kasan.sh \
+            "${{ matrix.target }}" \
+            "${{ matrix.driver }}" \
+            "${{ matrix.model }}" \
+            "${{ runner.temp }}/virtio-kasan/bzImage" \
+            "${{ runner.temp }}/${{ matrix.target }}-serial.log" \
+            2>&1 | tee "${{ runner.temp }}/${{ matrix.target }}-runner.log"
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -eq 77 ]; then
+            echo "result=unsupported" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$result" -ne 0 ]; then
+            echo "result=inconclusive-or-failed" >> "$GITHUB_OUTPUT"
+            exit "$result"
+          fi
+          if grep -q 'KASAN_REPRODUCED' "${{ runner.temp }}/${{ matrix.target }}-runner.log"; then
+            echo "result=reproduced" >> "$GITHUB_OUTPUT"
+          elif grep -q 'RESTORE_FAILURE_INJECTED_NO_KASAN_REPORT' "${{ runner.temp }}/${{ matrix.target }}-runner.log"; then
+            echo "result=no-report" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=inconclusive" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Upload target serial and QEMU logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: virtio-kasan-${{ matrix.target }}-logs
+          path: |
+            ${{ runner.temp }}/${{ matrix.target }}-serial.log
+            ${{ runner.temp }}/${{ matrix.target }}-runner.log
+          if-no-files-found: ignore
+          retention-days: 7
