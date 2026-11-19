@@ -413,6 +413,7 @@ err_ctrl:
 \tvi->sq = NULL;
 \tkfree(vi->ctrl);
 \tvi->ctrl = NULL;
+\tvi->cvq = NULL;
 }""",
         "virtio-net-free-queues-idempotent-empty-state",
     )
