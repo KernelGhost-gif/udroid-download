@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,9 @@ class NobleMateBuildTest(unittest.TestCase):
             (work / "plugins").mkdir()
             (work / "core/pv").mkdir(parents=True)
             (work / "core/pv/pv-arm64.deb").write_text("test package")
+            for source in VARIANT.iterdir():
+                if source.is_file():
+                    shutil.copy2(source, work / source.name)
             record = work / "sources.list"
             calls = work / "calls.txt"
             (work / "plugins/envsetup").write_text(r"""
