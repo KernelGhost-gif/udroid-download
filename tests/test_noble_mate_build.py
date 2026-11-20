@@ -38,6 +38,7 @@ run_shell_script() {
 do_build() {
     chroot_dir="$1"
     t_arch="$2"
+    MIRROR="https://ports.ubuntu.com/ubuntu-ports"
     mkdir -p "$chroot_dir/etc/apt"
     additional_setup
     cp "$chroot_dir/etc/apt/sources.list" "$RECORD"
