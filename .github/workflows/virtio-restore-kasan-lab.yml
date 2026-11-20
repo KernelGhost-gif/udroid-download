@@ -53,6 +53,10 @@ jobs:
           grep -q 'snd->queues\[i\].vqueue = NULL' linux/sound/virtio/virtio_card.c
           grep -q 'vi->data_vq = NULL' linux/drivers/crypto/virtio/virtio_crypto_core.c
           grep -q 'portdev->in_vqs = NULL' linux/drivers/char/virtio_console.c
+          grep -q 'failed restore can leave the console without an input queue' linux/drivers/char/virtio_console.c
+          grep -q 'free_buf(buf, false)' linux/drivers/char/virtio_console.c
+          ! grep -q 'BUG_ON(!port->in_vq)' linux/drivers/char/virtio_console.c
+          grep -q 'out_vq = port->out_vq' linux/drivers/char/virtio_console.c
           grep -q 'cpu_notif_registered' linux/drivers/net/virtio_net.c
           grep -q 'vqs_initialized' linux/sound/virtio/virtio_card.h
           grep -q 'snd->vqs_initialized' linux/sound/virtio/virtio_card.c
