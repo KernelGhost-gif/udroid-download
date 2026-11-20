@@ -1,6 +1,15 @@
 #!/bin/sh
 set -eu
 
+if command -v kwriteconfig6 >/dev/null 2>&1; then
+    kde_config_tool=kwriteconfig6
+elif command -v kwriteconfig5 >/dev/null 2>&1; then
+    kde_config_tool=kwriteconfig5
+else
+    echo "Neither "$kde_config_tool" nor kwriteconfig5 is installed" >&2
+    exit 1
+fi
+
 config_home=${XDG_CONFIG_HOME:-$HOME/.config}
 
 install -d "$config_home/Kvantum" "$config_home/gtk-3.0" "$config_home/gtk-4.0"
@@ -22,30 +31,30 @@ EOF
 
 cp "$config_home/gtk-3.0/settings.ini" "$config_home/gtk-4.0/settings.ini"
 
-kwriteconfig6 --file kdeglobals --group General --key ColorScheme MacTahoeDark
-kwriteconfig6 --file kdeglobals --group General --key font 'Inter,10,-1,5,50,0,0,0,0,0'
-kwriteconfig6 --file kdeglobals --group General --key fixed 'JetBrains Mono,10,-1,5,50,0,0,0,0,0'
-kwriteconfig6 --file kdeglobals --group Icons --key Theme MacTahoe-dark
-kwriteconfig6 --file kdeglobals --group KDE --key widgetStyle kvantum-dark
-kwriteconfig6 --file kcminputrc --group Mouse --key cursorTheme MacTahoe-dark
-kwriteconfig6 --file kcminputrc --group Mouse --key cursorSize 24
-kwriteconfig6 --file konsolerc --group 'Desktop Entry' --key DefaultProfile uDroid.profile
+"$kde_config_tool" --file kdeglobals --group General --key ColorScheme MacTahoeDark
+"$kde_config_tool" --file kdeglobals --group General --key font 'Inter,10,-1,5,50,0,0,0,0,0'
+"$kde_config_tool" --file kdeglobals --group General --key fixed 'JetBrains Mono,10,-1,5,50,0,0,0,0,0'
+"$kde_config_tool" --file kdeglobals --group Icons --key Theme MacTahoe-dark
+"$kde_config_tool" --file kdeglobals --group KDE --key widgetStyle kvantum-dark
+"$kde_config_tool" --file kcminputrc --group Mouse --key cursorTheme MacTahoe-dark
+"$kde_config_tool" --file kcminputrc --group Mouse --key cursorSize 24
+"$kde_config_tool" --file konsolerc --group 'Desktop Entry' --key DefaultProfile uDroid.profile
 
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key BorderSize Tiny
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft XAI
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnRight ''
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key library org.kde.kwin.aurorae.v2
-kwriteconfig6 --file kwinrc --group org.kde.kdecoration2 --key theme __aurorae__svg__MacTahoe-Dark
+"$kde_config_tool" --file kwinrc --group org.kde.kdecoration2 --key BorderSize Tiny
+"$kde_config_tool" --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnLeft XAI
+"$kde_config_tool" --file kwinrc --group org.kde.kdecoration2 --key ButtonsOnRight ''
+"$kde_config_tool" --file kwinrc --group org.kde.kdecoration2 --key library org.kde.kwin.aurorae.v2
+"$kde_config_tool" --file kwinrc --group org.kde.kdecoration2 --key theme __aurorae__svg__MacTahoe-Dark
 
 # Retain rounded masks and shadows, but avoid expensive full-surface blending.
-kwriteconfig6 --file kwinrc --group Compositing --key Enabled true
-kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled false
-kwriteconfig6 --file kwinrc --group Plugins --key backgroundcontrastEnabled false
-kwriteconfig6 --file kwinrc --group Plugins --key translucencyEnabled false
+"$kde_config_tool" --file kwinrc --group Compositing --key Enabled true
+"$kde_config_tool" --file kwinrc --group Plugins --key blurEnabled false
+"$kde_config_tool" --file kwinrc --group Plugins --key backgroundcontrastEnabled false
+"$kde_config_tool" --file kwinrc --group Plugins --key translucencyEnabled false
 
-kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
-kwriteconfig6 --file kscreenlockerrc --group Daemon --key LockOnResume false
-kwriteconfig6 --file kglobalshortcutsrc --group krunner --key _launch \
+"$kde_config_tool" --file kscreenlockerrc --group Daemon --key Autolock false
+"$kde_config_tool" --file kscreenlockerrc --group Daemon --key LockOnResume false
+"$kde_config_tool" --file kglobalshortcutsrc --group krunner --key _launch \
     'Meta+Space,Alt+F2,Run Command'
 
 if command -v plasma-apply-lookandfeel >/dev/null 2>&1; then
@@ -58,9 +67,17 @@ fi
 if command -v plasma-apply-desktoptheme >/dev/null 2>&1; then
     plasma-apply-desktoptheme MacTahoe-Dark-Opaque
 else
-    kwriteconfig6 --file plasmarc --group Theme --key name MacTahoe-Dark-Opaque
+    "$kde_config_tool" --file plasmarc --group Theme --key name MacTahoe-Dark-Opaque
 fi
 
 if command -v qdbus6 >/dev/null 2>&1; then
-    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
+    qdbus_tool=qdbus6
+elif command -v qdbus >/dev/null 2>&1; then
+    qdbus_tool=qdbus
+else
+    qdbus_tool=
+fi
+
+if [ -n "$qdbus_tool" ]; then
+    "$qdbus_tool" org.kde.KWin /KWin reconfigure >/dev/null 2>&1 || true
 fi
