@@ -124,6 +124,7 @@ def main() -> int:
 \tvi->data_vq = NULL;
 \tvi->ctrl_vq = NULL;
 \tvi->affinity_hint_set = false;
+\tvi->vqs_initialized = false;
 }""",
         "virtio-crypto-null-freed-queue-state",
     )
@@ -236,6 +237,35 @@ err_find:
 err_find:
 \tkfree(vqs_info);""",
         "virtio-crypto-rollback-partial-engine-initialization",
+    )
+
+    replace_once(
+        root,
+        "drivers/crypto/virtio/virtio_crypto_core.c",
+        """static void virtcrypto_del_vqs(struct virtio_crypto *vcrypto)
+{
+\tstruct virtio_device *vdev = vcrypto->vdev;
+
+\tvirtcrypto_clean_affinity(vcrypto, -1);
+
+\tvdev->config->del_vqs(vdev);
+
+\tvirtcrypto_free_queues(vcrypto);
+}""",
+        """static void virtcrypto_del_vqs(struct virtio_crypto *vcrypto)
+{
+\tstruct virtio_device *vdev = vcrypto->vdev;
+
+\tvirtcrypto_clean_affinity(vcrypto, -1);
+
+\tif (vcrypto->vqs_initialized) {
+\t\tvdev->config->del_vqs(vdev);
+\t\tvcrypto->vqs_initialized = false;
+\t}
+
+\tvirtcrypto_free_queues(vcrypto);
+}""",
+        "virtio-crypto-del-only-live-vqs",
     )
     # virtio-console: free-on-error was followed by unconditional freeing at
     # remove; also clear the per-port pointers when the queues are deleted.
