@@ -7,7 +7,7 @@ export SUITE="$1"
 shift
 plasma_files="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "$SUITE" in
-    resolute) ;;
+    noble | resolute) ;;
     trixie) export OVERRIDER_MIRROR="https://deb.debian.org/debian" ;;
     *) die "Unsupported Plasma suite: $SUITE" ;;
 esac
