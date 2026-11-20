@@ -56,7 +56,7 @@ try:
         if not ok:continue
         small=cv2.resize(fr,(540,960))
         txt=pytesseract.image_to_string(small,lang="eng+jpn",config="--psm 11")
-        if re.search(r"\b(IMAX|DECEMBER|THEATRICAL|TICKETS|RELEASE DATE|COMING SOON)\b",txt,re.I):
+        if re.search(r"\b(IMAX|DECEMBER|THEATRICAL|TICKETS|RELEASE DATE|COMING SOON|DOMAIN|INFINITE|VOID|KENJAKU|GETO|PRISON REALM)\b",txt,re.I) or re.search(r"(公開日|上映日|発売日|劇場公開|チケット|獄門疆|羂索|夏油傑)",txt):
             ocr_bad.append({"time_s":round(float(t),2),"text":txt.strip()[:160]})
     cap.release()
 except Exception as e:
@@ -66,6 +66,8 @@ checks["no_burned_in_promo_text"]=len(ocr_bad)==0
 required=["overview_16frame.jpg","drop_contact_sheet_6frame.jpg","beat_timing.csv",
           "audio_analysis.json","manifest.json","render_report.json","transcript.json"]
 checks["qa_artifacts_present"]=all((OUT/n).exists() and (OUT/n).stat().st_size>0 for n in required)
+checks["dialogue_setup_audio_present"]=(OUT/"dialogue_setup.wav").exists() and (OUT/"dialogue_setup.wav").stat().st_size>50000
+checks["dialogue_punchline_audio_present"]=(OUT/"dialogue_punchline.wav").exists() and (OUT/"dialogue_punchline.wav").stat().st_size>30000
 report={
  "video":str(VIDEO),"file_bytes":VIDEO.stat().st_size,
  "format":probe["format"],"video_stream":v,"audio_stream":a,

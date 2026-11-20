@@ -3,7 +3,7 @@ name: Gojo Dialogue-to-Drop Aura V2
 on:
   push:
     branches:
-      - amv/gojo-dialogue-aura-v2-20261116
+      - amv/gojo-dialogue-aura-v2-20261120
     paths:
       - ".github/workflows/gojo-aura-v2.yml"
       - "amv/gojo-aura-v2/**"
@@ -56,8 +56,16 @@ jobs:
             || yt-dlp --no-warnings --no-playlist --referer "https://www.bilibili.com/" \
             -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
             -o "inputs/gojo_manga_pv.%(ext)s" https://www.bilibili.com/video/BV1Zi421X7qU/
+          yt-dlp --no-warnings --no-playlist --extractor-args "youtube:player_client=android" \
+            -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
+            -o "inputs/gojo_character_trailer.%(ext)s" https://www.youtube.com/watch?v=8Qz477Ow1TA
           ls -lh inputs
           test -s inputs/REACTOR.mp3
+          test -s inputs/gojo_manga_pv.mp4
+          test -s inputs/gojo_character_trailer.mp4
+          for video in inputs/*.mp4; do
+            ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "$video" | grep -q audio
+          done
 
       - name: Render dialogue-led 3-act edit and QA artifacts
         working-directory: amv/gojo-aura-v2

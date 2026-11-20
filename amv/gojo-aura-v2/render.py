@@ -16,8 +16,8 @@ FPS_FINAL = 60
 W, H = 1080, 1920
 DURATION = 22.4
 DROP_EDIT = 7.60
-BLOCK_WORDS = re.compile(r"\b(DOMAIN|INFINITE|VOID|IMAX|DECEMBER|THEATRICAL|TICKETS|RELEASE DATE|COMING SOON)\b", re.I)
-BLOCK_JP = re.compile(r"(公開日|上映日|発売日|劇場公開|チケット)")
+BLOCK_WORDS = re.compile(r"\b(DOMAIN|INFINITE|VOID|IMAX|DECEMBER|THEATRICAL|TICKETS|RELEASE DATE|COMING SOON|KENJAKU|GETO|PRISON REALM)\b", re.I)
+BLOCK_JP = re.compile(r"(公開日|上映日|発売日|劇場公開|チケット|獄門疆|羂索|夏油傑)")
 KEYWORDS = ["最強", "領域展開", "無量空処", "強い", "大丈夫", "心配", "strongest", "domain expansion", "infinite void", "don't worry", "you are weak"]
 
 def sh(cmd, check=True, capture=False):
@@ -49,8 +49,12 @@ def transcribe_sources(videos, work):
             text = (s.text or "").strip()
             if not text or float(s.end)-float(s.start) < 0.35:
                 continue
+            word_items = []
+            for word in (getattr(s, "words", None) or []):
+                if word is not None and getattr(word, "word", None) is not None:
+                    word_items.append({"word":str(word.word),"start":float(word.start),"end":float(word.end)})
             item = {"source":str(video),"start":float(s.start),"end":float(s.end),"text":text,"language":info.language,
-                    "avg_logprob":float(getattr(s,"avg_logprob",-1.0))}
+                    "avg_logprob":float(getattr(s,"avg_logprob",-1.0)),"words":word_items}
             current.append(item)
             all_segments.append(item)
         transcripts.append({"source":str(video),"language":info.language,"segments":current})
@@ -117,16 +121,19 @@ def analyze_music(path, work):
         if not merged or t-merged[-1]>0.09: merged.append(t)
         elif onset[int(t*sr/hop)]>onset[int(merged[-1]*sr/hop)]: merged[-1]=t
     bpm=float(librosa.beat.tempo(onset_envelope=onset,sr=sr,hop_length=hop,aggregate=np.median)[0])
+    beat_frames=librosa.beat.beat_track(onset_envelope=onset,sr=sr,hop_length=hop,trim=False)[1]
+    beat_times=[float(t) for t in librosa.frames_to_time(beat_frames,sr=sr,hop_length=hop)]
     rows=[{"time_s":round(t,4),"time_ms":round(t*1000),"type":"onset"} for t in merged]
+    rows.extend({"time_s":round(t,4),"time_ms":round(t*1000),"type":"beat"} for t in beat_times)
     with (work/"beat_timing.csv").open("w",newline="") as f:
         w=csv.DictWriter(f,fieldnames=["time_s","time_ms","type"]);w.writeheader();w.writerows(rows)
     (work/"audio_analysis.json").write_text(json.dumps({
         "track":str(path),"duration_s":len(y)/sr,"sample_rate":sr,"estimated_bpm":bpm,
         "drop_source_s":drop,"drop_edit_s":DROP_EDIT,"subbass_jump_ratio":jump,
         "drop_onset_strength":drop_strength,"pre_drop_breath_s":0.55,
-        "transients_s":merged,"music_start_s":max(0.0,drop-DROP_EDIT)
+        "transients_s":merged,"beat_times_s":beat_times,"music_start_s":max(0.0,drop-DROP_EDIT)
     },indent=2))
-    return {"drop":drop,"start":max(0.0,drop-DROP_EDIT),"bpm":bpm,"transients":merged,"duration":len(y)/sr}
+    return {"drop":drop,"start":max(0.0,drop-DROP_EDIT),"bpm":bpm,"transients":merged,"beat_times_s":beat_times,"duration":len(y)/sr}
 
 def ocr_text(frame):
     try:
@@ -211,11 +218,25 @@ def inspect_candidates(videos):
 
 def face_center(frame):
     gray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
-    faces=FACE_CASCADE.detectMultiScale(gray,1.1,4,minSize=(32,32))
+    faces=FACE_CASCADE.detectMultiScale(gray,1.08,4,minSize=(28,28))
     if len(faces):
         x,y,w,h=max(faces,key=lambda f:f[2]*f[3])
-        return x+w/2, y+h*0.42
-    return frame.shape[1]/2, frame.shape[0]*0.42
+        return x+w/2, y+h*0.44
+    h,w=frame.shape[:2]
+    hsv=cv2.cvtColor(frame,cv2.COLOR_BGR2HSV)
+    hue,sat,val=cv2.split(hsv)
+    yy,xx=np.mgrid[0:h,0:w]
+    upper=(yy < int(h*0.68)).astype(np.float32)
+    white_hair=((val>165)&(sat<115)).astype(np.float32)
+    blue_energy=(((hue>=78)&(hue<=165))&(sat>75)&(val>85)).astype(np.float32)
+    edges=cv2.Canny(gray,55,135).astype(np.float32)/255.0
+    weights=(1.8*white_hair+1.0*blue_energy+0.16*edges)*upper
+    weights=cv2.GaussianBlur(weights,(0,0),sigmaX=max(8,w*0.035),sigmaY=max(8,h*0.035))
+    total=float(weights.sum())
+    if total<1e-3:return w/2,h*0.43
+    cx=float((weights*xx).sum()/total)
+    cy=float((weights*yy).sum()/total)+h*0.08
+    return float(np.clip(cx,w*0.18,w*0.82)),float(np.clip(cy,h*0.26,h*0.64))
 
 def smart_crop(frame, state):
     h,w=frame.shape[:2]
@@ -299,24 +320,45 @@ def load_font(size):
 
 def subtitle_overlay(frame, text):
     if not text:return frame
-    img=Image.fromarray(cv2.cvtColor(frame,cv2.COLOR_BGR2RGB))
-    draw=ImageDraw.Draw(img)
-    font=load_font(56)
-    # wrap without truncation; center in a dark translucent plate with enough room for Japanese glyphs.
-    lines=textwrap.wrap(text,width=24,break_long_words=True,replace_whitespace=False)[:3]
+    img=Image.fromarray(cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)).convert("RGBA")
+    font=load_font(70)
+    lines=textwrap.wrap(text,width=27,break_long_words=True,replace_whitespace=False)[:2]
     rendered="\n".join(lines)
-    bbox=draw.multiline_textbbox((0,0),rendered,font=font,spacing=12,stroke_width=5)
+    draw=ImageDraw.Draw(img)
+    bbox=draw.multiline_textbbox((0,0),rendered,font=font,spacing=5,stroke_width=8)
     tw,th=bbox[2]-bbox[0],bbox[3]-bbox[1]
-    box_w=min(W-80,tw+80); box_h=th+58
-    x=(W-box_w)//2; y=H-470
+    box_w=min(W-72,tw+92); box_h=th+58
+    x=(W-box_w)//2; y=H-430
     plate=Image.new("RGBA",(W,H),(0,0,0,0))
     pd=ImageDraw.Draw(plate)
-    pd.rounded_rectangle((x,y,x+box_w,y+box_h),radius=22,fill=(0,0,0,145),outline=(30,180,255,150),width=2)
-    img=Image.alpha_composite(img.convert("RGBA"),plate)
+    for k in range(54):
+        alpha=int(174*(1-k/54)); yy=y-24+k
+        pd.rectangle((x,yy,x+box_w,y+box_h+24),fill=(0,0,0,alpha))
+    pd.rounded_rectangle((x,y,x+box_w,y+box_h),radius=13,fill=(0,0,0,198),outline=(55,185,255,125),width=2)
+    img=Image.alpha_composite(img,plate)
     draw=ImageDraw.Draw(img)
-    draw.multiline_text(((W-tw)//2,y+28),rendered,font=font,fill=(245,250,255,255),
-        stroke_width=6,stroke_fill=(0,0,0,255),spacing=12,align="center")
+    tx=(W-tw)//2
+    draw.multiline_text((tx+2,y+23),rendered,font=font,fill=(0,0,0,255),stroke_width=11,stroke_fill=(0,0,0,255),spacing=5,align="center")
+    draw.multiline_text((tx,y+21),rendered,font=font,fill=(245,250,255,255),stroke_width=7,stroke_fill=(0,0,0,255),spacing=5,align="center")
     return cv2.cvtColor(np.array(img.convert("RGB")),cv2.COLOR_RGB2BGR)
+
+def subtitle_phrase(segment, timeline_t, delay, max_words=5):
+    if timeline_t<delay:return ""
+    clip_start=max(0.0,float(segment["start"])+0.02)
+    source_t=clip_start+(timeline_t-delay)
+    words=segment.get("words") or []
+    if words:
+        active=[w for w in words if float(w["start"])<=source_t+0.015 and float(w["end"])>=source_t-1.55]
+        active=active[-max_words:]
+        if not active:return ""
+        parts=[str(w["word"]).strip() for w in active if str(w["word"]).strip()]
+        if str(segment.get("language","")).lower().startswith("ja"):return "".join(parts)
+        return " ".join(parts).strip()
+    tokens=(segment.get("text") or "").split()
+    if not tokens:return ""
+    dur=max(0.55,float(segment["end"])-clip_start)
+    n=max(1,min(len(tokens),int(((timeline_t-delay)/dur)*len(tokens))+1))
+    return " ".join(tokens[max(0,n-max_words):n])
 
 def extract_frame(cap, source_t):
     cap.set(cv2.CAP_PROP_POS_MSEC,max(0,source_t)*1000)
@@ -351,52 +393,63 @@ def make_audio(music, voice1, voice2, riser, music_start, out, v1dur, v2dur):
       f"[2:a]adelay=5500|5500,volume=1.35,highpass=f=120,treble=g=3:f=3200, aecho=0.75:0.55:70|115:0.18|0.10[v2];"
       f"[3:a]adelay=6900|6900,volume=0.42[r];"
       f"[bg][v1][v2][r]amix=inputs=4:duration=longest:dropout_transition=0:normalize=0,"
-      f"atrim=duration={DURATION},afade=t=out:st=21.35:d=1.05,"
+      f"volume='if(between(t,7.44,7.60),0,1)':eval=frame,"
+      f"atrim=duration={DURATION},afade=t=out:st=21.28:d=1.12,"
       f"loudnorm=I=-11:TP=-1.0:LRA=7:linear=true,alimiter=limit=0.89[a]"
     )
     sh(["ffmpeg","-y","-v","error","-i",str(music),"-i",str(voice1),"-i",str(voice2),"-i",str(riser),
         "-filter_complex",f,"-map","[a]","-c:a","pcm_s24le","-ar","48000",str(out)])
 
-def choose_shots(candidates, setup, punch, files_by_path):
-    # Timeline entries use unique source windows and exclude the intro/punchline windows.
+def choose_shots(candidates, setup, punch, files_by_path, audio_info):
     shots=[]
     def add(start,end,src,start_src,role,meta=None):
-        shots.append({"start":start,"end":end,"source":src,"source_start":start_src,"role":role,"meta":meta or {}})
+        shots.append({"start":round(float(start),4),"end":round(float(end),4),
+                      "source":src,"source_start":float(start_src),"role":role,"meta":meta or {}})
     add(0.0,5.45,setup["source"],max(0,setup["start"]-0.45),"dialogue_setup",setup)
     add(5.45,DROP_EDIT,punch["source"],max(0,punch["start"]-0.25),"punchline",punch)
-    # The post-drop uses diverse unique windows, biased towards violet/blue/red and optical-flow peaks.
+    action_end=21.28
+    period=float(np.clip(60.0/max(1.0,audio_info.get("bpm",103.0)),0.48,0.72))
+    bounds=[DROP_EDIT]
+    t=DROP_EDIT+period
+    while t<=action_end-0.50:
+        bounds.append(t);t+=period
+    bounds.append(action_end)
+    needed=len(bounds)-1
     remaining=[c for c in candidates if not (
         (c["source"]==setup["source"] and abs(c["start"]-setup["start"])<2.0) or
         (c["source"]==punch["source"] and abs(c["start"]-punch["start"])<2.0))]
     def cls(c):
-        return max([("violet",c["violet"]),("blue",c["blue"]),("red",c["red"]),("motion",c["motion"]),("calm",c["whitehair"])],key=lambda x:x[1])[0]
+        return max([("violet",c["violet"]),("blue",c["blue"]),("red",c["red"]),
+                    ("motion",c["motion"]),("calm",c["whitehair"])],key=lambda x:x[1])[0]
     buckets=defaultdict(list)
     for c in remaining:buckets[cls(c)].append(c)
-    order=["violet","blue","red","motion","blue","violet","motion","calm","red","blue","calm","violet","blue"]
+    for bucket in buckets.values():
+        bucket.sort(key=lambda c:c["score"]+0.3*c["gojo_score"],reverse=True)
+    order=["violet","blue","red","motion","blue","violet","motion","calm","red","blue","violet","motion"]
     selected=[]
-    for k in order:
-        pool=buckets[k]
-        while pool and pool[0] in selected:pool.pop(0)
-        if pool:
-            selected.append(pool.pop(0))
-    for c in remaining:
-        if len(selected)>=13:break
-        if c not in selected and all(c["source"]!=u["source"] or abs(c["start"]-u["start"])>2.30 for u in selected):
-            selected.append(c)
-    if len(selected)<13:
-        raise RuntimeError(f"Only {len(selected)} unique, Gojo-scored shots passed the frame/OCR filters; need 13 unique action shots. Repeated source windows are prohibited.")
-    # 11 action shots across 13.6 seconds; no section is left empty.
-    bounds=[7.60,8.72,9.80,10.88,11.96,13.04,14.12,15.20,16.28,17.36,18.44,19.52,20.60,21.28]
+    while len(selected)<needed:
+        progress=False
+        for k in order:
+            pool=buckets.get(k,[])
+            candidate=next((c for c in pool if c not in selected and
+                all(c["source"]!=u["source"] or abs(c["start"]-u["start"])>=2.30 for u in selected)),None)
+            if candidate is not None:
+                selected.append(candidate);progress=True
+                if len(selected)>=needed:break
+        if not progress:break
+    if len(selected)<needed:
+        raise RuntimeError(f"Only {len(selected)} unique clean Gojo windows passed scene/OCR screening; {needed} beat-locked action shots are required. Repeated windows are prohibited.")
     for i,(a,b) in enumerate(zip(bounds[:-1],bounds[1:])):
-        c=selected[i%len(selected)]
+        c=selected[i]
         add(a,b,c["source"],c["start"],"aura_action",c)
-    # Iconic ending is the cleanest high-Gojo-score, low-motion candidate not previously used.
-    used={(s["source"],round(s["source_start"],1)) for s in shots}
-    ending=sorted([c for c in candidates if (c["source"],round(c["start"],1)) not in used and all(c["source"]!=s["source"] or abs(c["start"]-s["source_start"])>2.30 for s in shots)],
-                  key=lambda c:(c["gojo_score"]-0.9*c["motion"]+1.1*(c["blue"]+c["violet"])),reverse=True)
-    if not ending: raise RuntimeError("No unique, clean Gojo ending shot remains after enforcing non-overlap; refusing to recycle a shot.")
+    used=[(s["source"],s["source_start"]) for s in shots]
+    ending=sorted(
+      [c for c in candidates if all(c["source"]!=src or abs(c["start"]-st)>2.30 for src,st in used+[(x["source"],x["start"]) for x in selected])],
+      key=lambda c:(c["gojo_score"]-0.9*c["motion"]+1.1*(c["blue"]+c["violet"])),reverse=True
+    )
+    if not ending:raise RuntimeError("No unique clean Gojo ending candidate remains; refusing to recycle a shot.")
     c=ending[0]
-    add(21.28,DURATION,c["source"],c["start"],"final_hold",c)
+    add(action_end,DURATION,c["source"],c["start"],"final_hold",c)
     return shots
 
 def render_frames(shots, candidates, audio_info, voice_setup, voice_punch, outdir):
@@ -430,10 +483,11 @@ def render_frames(shots, candidates, audio_info, voice_setup, voice_punch, outdi
         frame=smart_crop(fr,states[si])
         frame=grade(frame,t,beat_edit,impact_times,idx)
         if t<5.45:
-            text=voice_setup["text"] if t>=0.45 else ""
+            text=subtitle_phrase(voice_setup,t,0.45,max_words=5)
             frame=subtitle_overlay(frame,text)
         elif 5.45<=t<DROP_EDIT:
-            frame=subtitle_overlay(frame,voice_punch["text"])
+            text=subtitle_phrase(voice_punch,t,5.50,max_words=5)
+            frame=subtitle_overlay(frame,text)
         if s["role"]=="final_hold":
             # hold on Gojo only; no text card or outro slogan.
             pass
@@ -474,6 +528,9 @@ def build_manifest(outdir, shots, setup, punch, music_info, v1dur, v2dur):
     data={
       "title":"Gojo Satoru — Dialogue to Drop Aura Edit V2",
       "duration_s":DURATION,"base_fps":FPS_BASE,"final_fps":FPS_FINAL,
+      "structure":{"act1_dialogue_setup_s":[0.0,5.45],"act2_punchline_s":[5.45,DROP_EDIT],
+                   "act3_aura_showoff_s":[DROP_EDIT,21.28],"ending_hold_s":[21.28,DURATION],
+                   "pre_drop_dead_air_s":[7.44,7.60],"cut_strategy":"one beat per action shot"},
       "resolution":[W,H],"audio":{"track":"REACTOR by NO LIMITS PHONK",
       "music_credit":"Music: NO LIMITS PHONK — https://www.youtube.com/@nolimits_phonk",
       "drop_source_s":music_info["drop"],"drop_edit_s":DROP_EDIT,"bpm":music_info["bpm"],
@@ -507,7 +564,7 @@ def main():
     write_riser(riser);make_audio(music,v1,v2,riser,audio_info["start"],audio,v1dur,v2dur)
     candidates=inspect_candidates(videos)
     if len(candidates)<12:raise RuntimeError(f"Only {len(candidates)} frames passed Gojo/OCR screening.")
-    shots=choose_shots(candidates,setup,punch,{})
+    shots=choose_shots(candidates,setup,punch,{},audio_info)
     # Persist candidate scores for audit.
     (out/"scene_scores.json").write_text(json.dumps(candidates,indent=2))
     raw,beats,impacts=render_frames(shots,candidates,audio_info,setup,punch,out)
@@ -526,6 +583,8 @@ def main():
       "action_shot_count":sum(s["role"]=="aura_action" for s in shots),
       "dialogue_setup_text":setup["text"],"punchline_text":punch["text"],
       "music_drop_edit_s":DROP_EDIT,"beat_count":len(beats),"impact_count":len(impacts),
+      "unique_source_windows":len({(s["source"],round(s["source_start"],2)) for s in shots}),
+      "post_drop_action_shots":sum(s["role"]=="aura_action" for s in shots),
       "video":str(final)
     },ensure_ascii=False,indent=2))
     print(json.dumps({"video":str(final),"shots":len(shots),"dialogue_setup":setup["text"],"punchline":punch["text"]},ensure_ascii=False))
