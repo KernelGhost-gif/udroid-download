@@ -48,7 +48,7 @@ if command -v xdg-user-dirs-update >/dev/null 2>&1; then
     HOME=/root xdg-user-dirs-update
 fi
 
-install -d /etc/dconf/profile
+install -d /etc/dconf/profile /etc/dconf/db/local.d
 cat > /etc/dconf/profile/user <<'EOF_DCONF'
 user-db:user
 system-db:local
