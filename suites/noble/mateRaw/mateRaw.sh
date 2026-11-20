@@ -2,7 +2,7 @@
 # Build the Ubuntu Noble MATE desktop variant for uDroid.
 # shellcheck disable=SC1091
 
-set -Eeuo pipefail
+set -Ee -o pipefail
 source plugins/envsetup
 
 export OVERRIDER_COMPRESSION_TYPE SUITE ENABLE_EXIT ENABLE_USER_SETUP INCLUDE_PACKAGES
