@@ -1,6 +1,8 @@
 name: Noble MATE Build Validation
 
 on:
+  push:
+    branches: [feat/noble-mate-clean]
   pull_request:
     branches: [main]
     paths:
