@@ -34,13 +34,58 @@ def main() -> int:
 \tvdev->config->del_vqs(vdev);
 
 \tfor (i = 0; i < snd->nsubstreams; ++i)""",
-        """\tvirtio_reset_device(vdev);
-\tvdev->config->del_vqs(vdev);
+        """\tif (snd->vqs_initialized) {
+\t\tvirtio_reset_device(vdev);
+\t\tvdev->config->del_vqs(vdev);
+\t\tsnd->vqs_initialized = false;
+\t}
 \tfor (i = 0; i < VIRTIO_SND_VQ_MAX; ++i)
 \t\tsnd->queues[i].vqueue = NULL;
 
 \tfor (i = 0; i < snd->nsubstreams; ++i)""",
         "virtio-snd-clear-queues-on-freeze",
+    )
+
+
+    replace_once(
+        root,
+        "sound/virtio/virtio_card.h",
+        """struct virtio_snd {
+\tstruct virtio_device *vdev;
+\tstruct virtio_snd_queue queues[VIRTIO_SND_VQ_MAX];""",
+        """struct virtio_snd {
+\tstruct virtio_device *vdev;
+\tbool vqs_initialized;
+\tstruct virtio_snd_queue queues[VIRTIO_SND_VQ_MAX];""",
+        "virtio-snd-vqs-initialized-state-field",
+    )
+    replace_once(
+        root,
+        "sound/virtio/virtio_card.c",
+        """\tfor (i = 0; i < VIRTIO_SND_VQ_MAX; ++i)
+\t\tsnd->queues[i].vqueue = vqs[i];""",
+        """\tsnd->vqs_initialized = true;
+\tfor (i = 0; i < VIRTIO_SND_VQ_MAX; ++i)
+\t\tsnd->queues[i].vqueue = vqs[i];""",
+        "virtio-snd-mark-vqs-live-after-find",
+    )
+    replace_once(
+        root,
+        "sound/virtio/virtio_card.c",
+        """\tvirtio_reset_device(vdev);
+\tvdev->config->del_vqs(vdev);
+
+\tfor (i = 0; snd->substreams && i < snd->nsubstreams; ++i)""",
+        """\tif (snd->vqs_initialized) {
+\t\tvirtio_reset_device(vdev);
+\t\tvdev->config->del_vqs(vdev);
+\t\tsnd->vqs_initialized = false;
+\t}
+\tfor (i = 0; i < VIRTIO_SND_VQ_MAX; ++i)
+\t\tsnd->queues[i].vqueue = NULL;
+
+\tfor (i = 0; snd->substreams && i < snd->nsubstreams; ++i)""",
+        "virtio-snd-remove-only-deletes-live-vqs",
     )
 
     # virtio-crypto: free helpers must leave an explicit empty state, and
@@ -133,6 +178,65 @@ def main() -> int:
         "virtio-crypto-cancel-only-initialized-work",
     )
 
+
+    replace_once(
+        root,
+        "drivers/crypto/virtio/virtio_crypto_common.h",
+        """\t/* Does the affinity hint is set for virtqueues? */
+\tbool affinity_hint_set;""",
+        """\t/* Does the affinity hint is set for virtqueues? */
+\tbool affinity_hint_set;
+\tbool vqs_initialized;""",
+        "virtio-crypto-vqs-initialized-state-field",
+    )
+    replace_once(
+        root,
+        "drivers/crypto/virtio/virtio_crypto_core.c",
+        """\tint i, total_vqs;
+\tstruct device *dev = &vi->vdev->dev;""",
+        """\tint i, j, total_vqs;
+\tstruct device *dev = &vi->vdev->dev;""",
+        "virtio-crypto-initialization-rollback-index",
+    )
+    replace_once(
+        root,
+        "drivers/crypto/virtio/virtio_crypto_core.c",
+        """\tret = virtio_find_vqs(vi->vdev, total_vqs, vqs, vqs_info, NULL);
+\tif (ret)
+\t\tgoto err_find;
+
+\tvi->ctrl_vq = vqs[total_vqs - 1];""",
+        """\tret = virtio_find_vqs(vi->vdev, total_vqs, vqs, vqs_info, NULL);
+\tif (ret)
+\t\tgoto err_find;
+
+\tvi->vqs_initialized = true;
+\tvi->ctrl_vq = vqs[total_vqs - 1];""",
+        "virtio-crypto-mark-vqs-live-after-find",
+    )
+    replace_once(
+        root,
+        "drivers/crypto/virtio/virtio_crypto_core.c",
+        """err_engine:
+err_find:
+\tkfree(vqs_info);""",
+        """err_engine:
+\tvirtio_reset_device(vi->vdev);
+\tvirtio_synchronize_cbs(vi->vdev);
+\tfor (j = 0; j < i; j++) {
+\t\tcancel_work_sync(&vi->data_vq[j].done_work);
+\t\tif (vi->data_vq[j].engine) {
+\t\t\tcrypto_engine_exit(vi->data_vq[j].engine);
+\t\t\tvi->data_vq[j].engine = NULL;
+\t\t}
+\t}
+\tvi->vdev->config->del_vqs(vi->vdev);
+\tvi->vqs_initialized = false;
+\tvi->ctrl_vq = NULL;
+err_find:
+\tkfree(vqs_info);""",
+        "virtio-crypto-rollback-partial-engine-initialization",
+    )
     # virtio-console: free-on-error was followed by unconditional freeing at
     # remove; also clear the per-port pointers when the queues are deleted.
     replace_once(
@@ -240,7 +344,10 @@ def main() -> int:
 \tkfree(portdev->in_vqs);
 \tkfree(portdev->out_vqs);
 }""",
-        """\tportdev->vdev->config->del_vqs(portdev->vdev);
+        """\tif (portdev->vqs_initialized) {
+\t\tportdev->vdev->config->del_vqs(portdev->vdev);
+\t\tportdev->vqs_initialized = false;
+\t}
 
 \tlist_for_each_entry(port, &portdev->ports, list) {
 \t\tspin_lock_irq(&port->inbuf_lock);
@@ -260,6 +367,37 @@ def main() -> int:
         "virtio-console-clear-queue-pointers-after-delete",
     )
 
+
+    replace_once(
+        root,
+        "drivers/char/virtio_console.c",
+        """\tbool pm_freezing;""",
+        """\tbool pm_freezing;
+\tbool vqs_initialized;""",
+        "virtio-console-vqs-initialized-state-field",
+    )
+    replace_once(
+        root,
+        "drivers/char/virtio_console.c",
+        """\t\t}
+\t}
+\tkfree(vqs_info);
+\tkfree(vqs);
+
+\treturn 0;
+
+free:""",
+        """\t\t}
+\t}
+\tportdev->vqs_initialized = true;
+\tkfree(vqs_info);
+\tkfree(vqs);
+
+\treturn 0;
+
+free:""",
+        "virtio-console-mark-vqs-live-after-find",
+    )
     # virtio-net: track CPU hotplug registration explicitly, and make a
     # failed init_vqs unwind leave queue arrays in a safe empty state.
     replace_once(
@@ -719,7 +857,7 @@ out:
         "virtio-net-del-only-live-vqs",
     )
 
-    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied")
+    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied-with-idempotent-transport-state")
     return 0
 
 
