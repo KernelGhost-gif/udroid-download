@@ -426,8 +426,6 @@ err_find:
         root,
         "drivers/char/virtio_console.c",
         """\tstruct port_buffer *buf;
-\tstruct virtqueue *out_vq;
-\tunsigned long flags;
 \tstruct splice_desc sd = {
 \t\t.total_len = len,
 \t\t.flags = flags,
@@ -440,7 +438,13 @@ err_find:
 \t * Rproc_serial does not yet support splice.""",
         """\tstruct port_buffer *buf;
 \tstruct virtqueue *out_vq;
-\tunsigned long flags;
+\tunsigned long irqflags;
+\tstruct splice_desc sd = {
+\t\t.total_len = len,
+\t\t.flags = flags,
+\t\t.pos = *ppos,
+\t\t.u.data = &sgl,
+\t};
 \tunsigned int occupancy;
 
 \t/*
@@ -452,13 +456,13 @@ err_find:
         "drivers/char/virtio_console.c",
         """\tif (is_rproc_serial(port->out_vq->vdev))
 \t\treturn -EINVAL;""",
-        """\tspin_lock_irqsave(&port->outvq_lock, flags);
+        """\tspin_lock_irqsave(&port->outvq_lock, irqflags);
 \tout_vq = port->out_vq;
 \tif (out_vq && is_rproc_serial(out_vq->vdev)) {
-\t\tspin_unlock_irqrestore(&port->outvq_lock, flags);
+\t\tspin_unlock_irqrestore(&port->outvq_lock, irqflags);
 \t\treturn -EINVAL;
 \t}
-\tspin_unlock_irqrestore(&port->outvq_lock, flags);""",
+\tspin_unlock_irqrestore(&port->outvq_lock, irqflags);""",
         "virtio-console-splice-rproc-check-under-outvq-lock",
     )
     replace_once(
