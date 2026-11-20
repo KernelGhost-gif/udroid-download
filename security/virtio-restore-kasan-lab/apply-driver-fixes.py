@@ -459,7 +459,8 @@ err_find:
         """\tif (!use_multiport(portdev))
 \t\treturn 0;
 
-\tvq = portdev->c_ovq;""",
+\tvq = portdev->c_ovq;
+\tspin_lock(&portdev->c_ovq_lock);""",
         """\tif (!use_multiport(portdev))
 \t\treturn 0;
 
