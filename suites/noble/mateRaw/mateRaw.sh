@@ -8,7 +8,7 @@ source plugins/envsetup
 export OVERRIDER_COMPRESSION_TYPE SUITE ENABLE_EXIT ENABLE_USER_SETUP INCLUDE_PACKAGES
 SUITE="noble"
 VARIENT="mateRaw"
-frn="out/\${SUITE}-\${VARIENT}"
+frn="out/${SUITE}-${VARIENT}"
 OVERRIDER_COMPRESSION_TYPE="gzip"
 ENABLE_EXIT=true
 ENABLE_USER_SETUP=false
@@ -23,18 +23,18 @@ deb $MIRROR $SUITE-backports main restricted universe multiverse
 EOF_SOURCES
 
     lshout "Setting up pv..."
-    cp "$ROOT_DIR/core/pv/pv-\${t_arch}.deb" "$chroot_dir/"
-    run_cmd "dpkg -i /pv-\${t_arch}.deb"
-    run_cmd "rm -f /pv-\${t_arch}.deb"
+    cp "$ROOT_DIR/core/pv/pv-${t_arch}.deb" "$chroot_dir/"
+    run_cmd "dpkg -i /pv-${t_arch}.deb"
+    run_cmd "rm -f /pv-${t_arch}.deb"
 
     # Install MATE in the image, then configure it for an external Termux:X11
     # server. No display manager or in-container Xorg server is installed.
-    run_shell_script "\${VARIENT}-setup.sh"
-    run_shell_script "\${VARIENT}-fixes.sh"
-    run_shell_script "\${VARIENT}-cleanup.sh"
+    run_shell_script "${VARIENT}-setup.sh"
+    run_shell_script "${VARIENT}-fixes.sh"
+    run_shell_script "${VARIENT}-cleanup.sh"
 }
 
-case "\${1:-arm64}" in
+case "${1:-arm64}" in
     arm64) _arch="arm64" ;;
     all) _arch="arm64" ;;
     *)
@@ -42,7 +42,7 @@ case "\${1:-arm64}" in
         ;;
 esac
 
-build_target="\${frn}-arm64"
+build_target="${frn}-arm64"
 build_complete=false
 cleanup_build() {
     if [ "$build_complete" = false ]; then
@@ -62,4 +62,4 @@ do_unmount "$build_target"
 build_complete=true
 
 shout "Noble MATE build complete. Output:"
-ls -lh "\${frn}-arm64.tar.gz"
+ls -lh "${frn}-arm64.tar.gz"
