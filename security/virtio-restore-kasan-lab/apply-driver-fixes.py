@@ -193,11 +193,17 @@ static void virtcrypto_set_affinity(struct virtio_crypto *vcrypto)
     replace_once(
         root,
         "drivers/crypto/virtio/virtio_crypto_core.c",
-        """\tfor (i = 0; i < vcrypto->max_data_queues; i++)
-\t\tcancel_work_sync(&vcrypto->data_vq[i].done_work);""",
-        """\tif (vcrypto->data_vq)
+        """\tif (virtcrypto_dev_started(vcrypto))
+\t\tvirtcrypto_dev_stop(vcrypto);
+\tfor (i = 0; i < vcrypto->max_data_queues; i++)
+\t\tcancel_work_sync(&vcrypto->data_vq[i].done_work);
+\tvirtio_reset_device(vdev);""",
+        """\tif (virtcrypto_dev_started(vcrypto))
+\t\tvirtcrypto_dev_stop(vcrypto);
+\tif (vcrypto->data_vq)
 \t\tfor (i = 0; i < vcrypto->max_data_queues; i++)
-\t\t\tcancel_work_sync(&vcrypto->data_vq[i].done_work);""",
+\t\t\tcancel_work_sync(&vcrypto->data_vq[i].done_work);
+\tvirtio_reset_device(vdev);""",
         "virtio-crypto-cancel-only-initialized-work",
     )
 
