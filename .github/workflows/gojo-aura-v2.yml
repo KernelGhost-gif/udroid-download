@@ -50,18 +50,21 @@ jobs:
           curl --fail --location --retry 5 --retry-all-errors \
             --output inputs/REACTOR.mp3 \
             https://nolimitsphonk.com/assets/creators/reactor.mp3
-          yt-dlp --no-warnings --no-playlist --force-ipv4 --js-runtimes node \
-            --extractor-args "youtube:player_client=tv,web_safari" --sleep-requests 1 \
-            -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
-            -o "inputs/gojo_manga_pv.%(ext)s" https://www.youtube.com/watch?v=I0OVz4wt9ew
-          yt-dlp --no-warnings --no-playlist --force-ipv4 --js-runtimes node \
-            --extractor-args "youtube:player_client=tv,web_safari" --sleep-requests 1 \
-            -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
-            -o "inputs/gojo_character_trailer.%(ext)s" https://www.youtube.com/watch?v=8Qz477Ow1TA
+          # Source videos must be staged on this branch because GitHub Actions
+          # runner IPs are blocked by YouTube's bot-verification gate.
+          # Expected paths:
+          #   amv/gojo-aura-v2/inputs/gojo_manga_pv.mp4
+          #   amv/gojo-aura-v2/inputs/gojo_character_trailer.mp4
           ls -lh inputs
           test -s inputs/REACTOR.mp3
-          test -s inputs/gojo_manga_pv.mp4
-          test -s inputs/gojo_character_trailer.mp4
+          test -s inputs/gojo_manga_pv.mp4 || {
+            echo "::error::Missing inputs/gojo_manga_pv.mp4. Upload the Gojo PV to this branch path and push again."
+            exit 1
+          }
+          test -s inputs/gojo_character_trailer.mp4 || {
+            echo "::error::Missing inputs/gojo_character_trailer.mp4. Upload the Gojo character trailer to this branch path and push again."
+            exit 1
+          }
           for video in inputs/*.mp4; do
             ffprobe -v error -select_streams a:0 -show_entries stream=codec_type -of csv=p=0 "$video" | grep -q audio
           done
