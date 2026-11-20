@@ -1,8 +1,8 @@
 import json
 import os
 from pathlib import Path
-import subprocess
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -126,7 +126,7 @@ do_unmount() { :; }
                     "#!/bin/sh\n"
                     f"touch '{state}'\n"
                 ),
-                "rm": "#!/bin/sh\\nexit 0\\n",
+                "rm": "#!/bin/sh\nexit 0\n",
                 "dbus-run-session": "#!/bin/sh\n[ \"$1\" = -- ] && shift\nexec \"$@\"\n",
                 "mate-session": (
                     "#!/bin/sh\n"
