@@ -356,12 +356,35 @@ err_find:
 \tstruct port_buffer *buf;
 \tunsigned int len;
 
-\tif (!port->in_vq)
-\t\treturn NULL;
+\tif (port->inbuf)
+\t\treturn port->inbuf;
 
-\tif (port->inbuf)""",
+\tif (!port->in_vq)
+\t\treturn NULL;""",
         "virtio-console-get-inbuf-null-guard",
     )
+    replace_once(
+        root,
+        "drivers/char/virtio_console.c",
+        """\t\tif (add_inbuf(port->in_vq, buf) < 0)
+\t\t\tdev_warn(port->dev, "failed add_buf\\n");""",
+        """\t\tif (port->in_vq) {
+\t\t\tif (add_inbuf(port->in_vq, buf) < 0)
+\t\t\t\tdev_warn(port->dev, "failed add_buf\\n");
+\t\t} else {
+\t\t\tfree_buf(buf, false);
+\t\t}""",
+        "virtio-console-free-consumed-buffer-without-queue",
+    )
+    replace_once(
+        root,
+        "drivers/char/virtio_console.c",
+        """\t/* If we don't have an input queue yet, we can't get input. */
+\tBUG_ON(!port->in_vq);""",
+        """\t/* A failed restore can leave the console without an input queue. */""",
+        "virtio-console-hvc-read-without-queue",
+    )
+
     replace_once(
         root,
         "drivers/char/virtio_console.c",
@@ -398,6 +421,38 @@ err_find:
 \twhile ((buf = virtqueue_get_buf(port->out_vq, &len)))""",
         "virtio-console-reclaim-without-live-output-queue",
     )
+
+    replace_once(
+        root,
+        "drivers/char/virtio_console.c",
+        """\tstruct port_buffer *buf;
+\tunsigned int occupancy;
+
+\t/*
+\t * Rproc_serial does not yet support splice.""",
+        """\tstruct port_buffer *buf;
+\tstruct virtqueue *out_vq;
+\tunsigned long flags;
+\tunsigned int occupancy;
+
+\t/*
+\t * Rproc_serial does not yet support splice.""",
+        "virtio-console-splice-writer-queue-lock-state",
+    )
+    replace_once(
+        root,
+        "drivers/char/virtio_console.c",
+        """\tif (is_rproc_serial(port->out_vq->vdev))
+\t\treturn -EINVAL;""",
+        """\tspin_lock_irqsave(&port->outvq_lock, flags);
+\tout_vq = port->out_vq;
+\tif (out_vq && is_rproc_serial(out_vq->vdev)) {
+\t\tspin_unlock_irqrestore(&port->outvq_lock, flags);
+\t\treturn -EINVAL;
+\t}
+\tspin_unlock_irqrestore(&port->outvq_lock, flags);""",
+        "virtio-console-splice-rproc-check-under-outvq-lock",
+    )
     replace_once(
         root,
         "drivers/char/virtio_console.c",
@@ -405,10 +460,15 @@ err_find:
 \t\treturn 0;
 
 \tvq = portdev->c_ovq;""",
-        """\tif (!use_multiport(portdev) || !portdev->c_ovq)
+        """\tif (!use_multiport(portdev))
 \t\treturn 0;
 
-\tvq = portdev->c_ovq;""",
+\tspin_lock(&portdev->c_ovq_lock);
+\tvq = portdev->c_ovq;
+\tif (!vq) {
+\t\tspin_unlock(&portdev->c_ovq_lock);
+\t\treturn 0;
+\t}""",
         "virtio-console-control-send-null-guard",
     )
     replace_once(
@@ -432,12 +492,7 @@ err_find:
 \tkfree(portdev->in_vqs);
 \tkfree(portdev->out_vqs);
 }""",
-        """\tif (portdev->vqs_initialized) {
-\t\tportdev->vdev->config->del_vqs(portdev->vdev);
-\t\tportdev->vqs_initialized = false;
-\t}
-
-\tlist_for_each_entry(port, &portdev->ports, list) {
+        """\tlist_for_each_entry(port, &portdev->ports, list) {
 \t\tspin_lock_irq(&port->inbuf_lock);
 \t\tport->in_vq = NULL;
 \t\tspin_unlock_irq(&port->inbuf_lock);
@@ -445,8 +500,18 @@ err_find:
 \t\tport->out_vq = NULL;
 \t\tspin_unlock_irq(&port->outvq_lock);
 \t}
-\tportdev->c_ivq = NULL;
-\tportdev->c_ovq = NULL;
+\tif (multiport) {
+\t\tspin_lock_irq(&portdev->c_ivq_lock);
+\t\tportdev->c_ivq = NULL;
+\t\tspin_unlock_irq(&portdev->c_ivq_lock);
+\t\tspin_lock_irq(&portdev->c_ovq_lock);
+\t\tportdev->c_ovq = NULL;
+\t\tspin_unlock_irq(&portdev->c_ovq_lock);
+\t}
+\tif (portdev->vqs_initialized) {
+\t\tportdev->vdev->config->del_vqs(portdev->vdev);
+\t\tportdev->vqs_initialized = false;
+\t}
 \tkfree(portdev->in_vqs);
 \tportdev->in_vqs = NULL;
 \tkfree(portdev->out_vqs);
@@ -945,7 +1010,7 @@ out:
         "virtio-net-del-only-live-vqs",
     )
 
-    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied-with-idempotent-transport-state-and-work-drain")
+    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied-with-idempotent-transport-state-work-drain-and-hvc-guards")
     return 0
 
 
