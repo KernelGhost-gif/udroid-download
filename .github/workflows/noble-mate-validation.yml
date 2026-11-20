@@ -74,45 +74,7 @@ jobs:
           grep -Eq '(^|/)usr/local/bin/udroid-mate-x11$' "$RUNNER_TEMP/noble-mate-files.txt"
 
           status_member="$(grep -E '(^|/)var/lib/dpkg/status$' "$RUNNER_TEMP/noble-mate-files.txt" | head -n 1)"
-          os_release_member="$(grep -E '(^|/)usr/lib/os-release | head -n 1)"
-          test -n "$status_member"
-          test -n "$os_release_member"
-          tar -xOzf "$archive" "$status_member" > "$RUNNER_TEMP/dpkg-status"
-          tar -xOzf "$archive" "$os_release_member" > "$RUNNER_TEMP/os-release"
-
-          grep -Eq '^ID="?ubuntu"?$' "$RUNNER_TEMP/os-release"
-          grep -Eq '^VERSION_CODENAME="?noble"?$' "$RUNNER_TEMP/os-release"
-
-          for package in mate-session-manager mate-panel marco caja; do
-            awk -v package="$package" '
-              BEGIN { RS=""; FS="\n" }
-              {
-                name=""
-                state=""
-                for (i=1; i<=NF; i++) {
-                  if ($i ~ /^Package: /) {
-                    sub(/^Package: /, "", $i)
-                    name=$i
-                  }
-                  if ($i ~ /^Status: /) {
-                    sub(/^Status: /, "", $i)
-                    state=$i
-                  }
-                }
-                if (name == package && state == "install ok installed") found=1
-              }
-              END { exit(found ? 0 : 1) }
-            ' "$RUNNER_TEMP/dpkg-status"
-          done
-
-      - name: Upload Noble MATE rootfs
-        uses: actions/upload-artifact@v4.5.0
-        with:
-          name: noble-mateRaw-arm64-rootfs
-          path: fs-cook/out/noble-mateRaw-arm64.tar.gz
-          if-no-files-found: error
-          retention-days: 7
- "$RUNNER_TEMP/noble-mate-files.txt" | head -n 1)"
+          os_release_member="$(grep -E '(^|/)usr/lib/os-release$' "$RUNNER_TEMP/noble-mate-files.txt" | head -n 1)"
           test -n "$status_member"
           test -n "$os_release_member"
           tar -xOzf "$archive" "$status_member" > "$RUNNER_TEMP/dpkg-status"
