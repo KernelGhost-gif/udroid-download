@@ -50,13 +50,12 @@ jobs:
           curl --fail --location --retry 5 --retry-all-errors \
             --output inputs/REACTOR.mp3 \
             https://nolimitsphonk.com/assets/creators/reactor.mp3
-          yt-dlp --no-warnings --no-playlist --extractor-args "youtube:player_client=android" \
+          yt-dlp --no-warnings --no-playlist --force-ipv4 --js-runtimes node \
+            --extractor-args "youtube:player_client=tv,web_safari" --sleep-requests 1 \
             -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
-            -o "inputs/gojo_manga_pv.%(ext)s" https://www.youtube.com/watch?v=I0OVz4wt9ew \
-            || yt-dlp --no-warnings --no-playlist --referer "https://www.bilibili.com/" \
-            -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
-            -o "inputs/gojo_manga_pv.%(ext)s" https://www.bilibili.com/video/BV1Zi421X7qU/
-          yt-dlp --no-warnings --no-playlist --extractor-args "youtube:player_client=android" \
+            -o "inputs/gojo_manga_pv.%(ext)s" https://www.youtube.com/watch?v=I0OVz4wt9ew
+          yt-dlp --no-warnings --no-playlist --force-ipv4 --js-runtimes node \
+            --extractor-args "youtube:player_client=tv,web_safari" --sleep-requests 1 \
             -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
             -o "inputs/gojo_character_trailer.%(ext)s" https://www.youtube.com/watch?v=8Qz477Ow1TA
           ls -lh inputs
