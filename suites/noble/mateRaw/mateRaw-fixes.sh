@@ -13,13 +13,13 @@ fi
 
 install -d /etc/profile.d
 cat > /etc/profile.d/mate-termux-x11.sh <<'EOF_PROFILE'
-export DISPLAY="\${DISPLAY:-:0}"
+export DISPLAY="${DISPLAY:-:0}"
 export XDG_SESSION_TYPE=x11
 export XDG_CURRENT_DESKTOP=MATE
 export XDG_SESSION_DESKTOP=mate
 export DESKTOP_SESSION=mate
 export GDK_BACKEND=x11
-export GSK_RENDERER="\${GSK_RENDERER:-cairo}"
+export GSK_RENDERER="${GSK_RENDERER:-cairo}"
 EOF_PROFILE
 chmod 0644 /etc/profile.d/mate-termux-x11.sh
 
@@ -36,17 +36,17 @@ die() {
 # terminal. A fresh session bus is created below for mate-session.
 unset SESSION_MANAGER DBUS_SESSION_BUS_ADDRESS DBUS_SYSTEM_BUS_ADDRESS
 
-export DISPLAY="\${DISPLAY:-:0}"
+export DISPLAY="${DISPLAY:-:0}"
 export XDG_SESSION_TYPE=x11
 export XDG_CURRENT_DESKTOP=MATE
 export XDG_SESSION_DESKTOP=mate
 export DESKTOP_SESSION=mate
 export GDK_BACKEND=x11
-export GSK_RENDERER="\${GSK_RENDERER:-cairo}"
+export GSK_RENDERER="${GSK_RENDERER:-cairo}"
 
 # Android PRoot has no logind-managed /run/user/<uid>. Use a private,
 # writable runtime directory instead.
-export XDG_RUNTIME_DIR="\${UDROID_MATE_RUNTIME_DIR:-/tmp/mate-runtime-$(id -u)}"
+export XDG_RUNTIME_DIR="${UDROID_MATE_RUNTIME_DIR:-/tmp/mate-runtime-$(id -u)}"
 mkdir -p "$XDG_RUNTIME_DIR" || die "cannot create $XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR" || die "cannot secure $XDG_RUNTIME_DIR"
 
