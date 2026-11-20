@@ -54,6 +54,12 @@ jobs:
           grep -q 'vi->data_vq = NULL' linux/drivers/crypto/virtio/virtio_crypto_core.c
           grep -q 'portdev->in_vqs = NULL' linux/drivers/char/virtio_console.c
           grep -q 'cpu_notif_registered' linux/drivers/net/virtio_net.c
+          grep -q 'vqs_initialized' linux/sound/virtio/virtio_card.h
+          grep -q 'snd->vqs_initialized' linux/sound/virtio/virtio_card.c
+          grep -q 'vqs_initialized' linux/drivers/crypto/virtio/virtio_crypto_common.h
+          grep -q 'vqs_initialized' linux/drivers/crypto/virtio/virtio_crypto_core.c
+          grep -q 'virtio_synchronize_cbs' linux/drivers/crypto/virtio/virtio_crypto_core.c
+          grep -q 'vqs_initialized' linux/drivers/char/virtio_console.c
           grep -q 'vi->sts = NULL' linux/drivers/virtio/virtio_input.c
           grep -q 'if (vi->evt || vi->sts)' linux/drivers/virtio/virtio_input.c
           grep -q 'vgdev->ctrlq.vq = NULL' linux/drivers/gpu/drm/virtio/virtgpu_drv.c
@@ -71,6 +77,8 @@ jobs:
             drivers/char/virtio_console.c \
             drivers/net/virtio_net.c \
             drivers/virtio/virtio_input.c \
+            sound/virtio/virtio_card.h \
+            drivers/crypto/virtio/virtio_crypto_common.h \
             drivers/gpu/drm/virtio/virtgpu_drv.c \
             drivers/gpu/drm/virtio/virtgpu_kms.c \
             drivers/gpu/drm/virtio/virtgpu_vq.c \
