@@ -8,7 +8,16 @@ export XDG_CURRENT_DESKTOP=KDE
 export XDG_SESSION_DESKTOP=KDE
 export DESKTOP_SESSION=plasma
 export KDE_FULL_SESSION=true
-export KDE_SESSION_VERSION=6
+if command -v kwriteconfig6 >/dev/null 2>&1; then
+    kde_config_tool=kwriteconfig6
+    export KDE_SESSION_VERSION=6
+elif command -v kwriteconfig5 >/dev/null 2>&1; then
+    kde_config_tool=kwriteconfig5
+    export KDE_SESSION_VERSION=5
+else
+    echo "Neither kwriteconfig6 nor kwriteconfig5 is installed" >&2
+    exit 1
+fi
 export KDEWM=kwin_x11
 export QT_QPA_PLATFORM=xcb
 export XDG_MENU_PREFIX=plasma-
@@ -18,12 +27,12 @@ mkdir -p "$XDG_RUNTIME_DIR"
 chmod 0700 "$XDG_RUNTIME_DIR"
 
 # VNC and PRoot sessions do not have reliable logind-backed lock ownership.
-kwriteconfig6 --file kscreenlockerrc --group Daemon --key Autolock false
-kwriteconfig6 --file kscreenlockerrc --group Daemon --key LockOnResume false
-kwriteconfig6 --file kwinrc --group Compositing --key Enabled true
-kwriteconfig6 --file kwinrc --group Plugins --key blurEnabled false
-kwriteconfig6 --file kwinrc --group Plugins --key backgroundcontrastEnabled false
-kwriteconfig6 --file kwinrc --group Plugins --key translucencyEnabled false
+"$kde_config_tool" --file kscreenlockerrc --group Daemon --key Autolock false
+"$kde_config_tool" --file kscreenlockerrc --group Daemon --key LockOnResume false
+"$kde_config_tool" --file kwinrc --group Compositing --key Enabled true
+"$kde_config_tool" --file kwinrc --group Plugins --key blurEnabled false
+"$kde_config_tool" --file kwinrc --group Plugins --key backgroundcontrastEnabled false
+"$kde_config_tool" --file kwinrc --group Plugins --key translucencyEnabled false
 
 exec dbus-run-session -- /bin/sh -c '
     if [ -e "$HOME/.config/.udroid-mactahoe-pending" ]; then
