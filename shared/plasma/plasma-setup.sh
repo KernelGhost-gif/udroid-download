@@ -4,10 +4,11 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 # shellcheck disable=SC1091
 source /etc/os-release
-case "$ID" in
-    debian) distro_packages=(fonts-liberation adwaita-icon-theme) ;;
-    ubuntu) distro_packages=(fonts-ubuntu adwaita-icon-theme-full plasma-session-x11) ;;
-    *) echo "Unsupported Plasma distribution: $ID" >&2; exit 1 ;;
+case "$ID:${VERSION_CODENAME:-}" in
+    debian:*) distro_packages=(fonts-liberation adwaita-icon-theme qt6-style-kvantum) ;;
+    ubuntu:noble) distro_packages=(fonts-ubuntu adwaita-icon-theme-full qt5-style-kvantum) ;;
+    ubuntu:*) distro_packages=(fonts-ubuntu adwaita-icon-theme-full plasma-session-x11 qt6-style-kvantum) ;;
+    *) echo "Unsupported Plasma distribution: $ID (${VERSION_CODENAME:-unknown})" >&2; exit 1 ;;
 esac
 
 cp -a /udroid-build/overlay/. /
@@ -39,7 +40,7 @@ apt-get install -y --no-install-recommends \
     fonts-inter-variable fonts-jetbrains-mono \
     yaru-theme-gtk yaru-theme-icon \
     plasma-desktop plasma-workspace kwin-x11 \
-    dolphin konsole systemsettings qt6-style-kvantum plasma-widgets-addons \
+    dolphin konsole systemsettings plasma-widgets-addons \
     ark kate okular gwenview keepassxc mpv kcalc \
     kde-spectacle plasma-systemmonitor \
     libnotify-bin python3-minimal util-linux x11-utils
