@@ -126,6 +126,7 @@ do_unmount() { :; }
                     "#!/bin/sh\n"
                     f"touch '{state}'\n"
                 ),
+                "rm": "#!/bin/sh\\nexit 0\\n",
                 "dbus-run-session": "#!/bin/sh\n[ \"$1\" = -- ] && shift\nexec \"$@\"\n",
                 "mate-session": (
                     "#!/bin/sh\n"
