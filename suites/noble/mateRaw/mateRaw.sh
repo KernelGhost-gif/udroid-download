@@ -22,11 +22,6 @@ deb $MIRROR $SUITE-updates main restricted universe multiverse
 deb $MIRROR $SUITE-backports main restricted universe multiverse
 EOF_SOURCES
 
-    lshout "Setting up pv..."
-    cp "$ROOT_DIR/core/pv/pv-${t_arch}.deb" "$chroot_dir/"
-    run_cmd "dpkg -i /pv-${t_arch}.deb"
-    run_cmd "rm -f /pv-${t_arch}.deb"
-
     # Install MATE in the image, then configure it for an external Termux:X11
     # server. No display manager or in-container Xorg server is installed.
     run_shell_script "${VARIENT}-setup.sh"
