@@ -426,6 +426,14 @@ err_find:
         root,
         "drivers/char/virtio_console.c",
         """\tstruct port_buffer *buf;
+\tstruct virtqueue *out_vq;
+\tunsigned long flags;
+\tstruct splice_desc sd = {
+\t\t.total_len = len,
+\t\t.flags = flags,
+\t\t.pos = *ppos,
+\t\t.u.data = &sgl,
+\t};
 \tunsigned int occupancy;
 
 \t/*
