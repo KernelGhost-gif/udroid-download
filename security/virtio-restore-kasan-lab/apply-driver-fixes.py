@@ -114,6 +114,27 @@ def main() -> int:
     replace_once(
         root,
         "drivers/crypto/virtio/virtio_crypto_core.c",
+        """static void virtcrypto_set_affinity(struct virtio_crypto *vcrypto)
+{""",
+        """static void virtcrypto_cancel_done_work(struct virtio_crypto *vcrypto)
+{
+\tint i;
+
+\tif (!vcrypto->data_vq)
+\t\treturn;
+
+\tvirtio_synchronize_cbs(vcrypto->vdev);
+\tfor (i = 0; i < vcrypto->max_data_queues; i++)
+\t\tcancel_work_sync(&vcrypto->data_vq[i].done_work);
+}
+
+static void virtcrypto_set_affinity(struct virtio_crypto *vcrypto)
+{""",
+        "virtio-crypto-synchronize-and-cancel-done-work",
+    )
+    replace_once(
+        root,
+        "drivers/crypto/virtio/virtio_crypto_core.c",
         """static void virtcrypto_free_queues(struct virtio_crypto *vi)
 {
 \tkfree(vi->data_vq);
@@ -143,6 +164,7 @@ def main() -> int:
 \tif (!vcrypto->data_vq)
 \t\treturn;
 
+\tvirtcrypto_cancel_done_work(vcrypto);
 \tfor (i = 0; i < vcrypto->max_data_queues; i++)""",
         "virtio-crypto-clear-engines-null-guard",
     )
@@ -180,6 +202,35 @@ def main() -> int:
     )
 
 
+
+    replace_once(
+        root,
+        "drivers/crypto/virtio/virtio_crypto_core.c",
+        """\tif (vcrypto->data_vq)
+\t\tfor (i = 0; i < vcrypto->max_data_queues; i++)
+\t\t\tcancel_work_sync(&vcrypto->data_vq[i].done_work);
+\tvirtio_reset_device(vdev);
+\tvirtcrypto_free_unused_reqs(vcrypto);""",
+        """\tif (vcrypto->data_vq)
+\t\tfor (i = 0; i < vcrypto->max_data_queues; i++)
+\t\t\tcancel_work_sync(&vcrypto->data_vq[i].done_work);
+\tvirtio_reset_device(vdev);
+\tvirtcrypto_cancel_done_work(vcrypto);
+\tvirtcrypto_free_unused_reqs(vcrypto);""",
+        "virtio-crypto-remove-drains-work-after-reset",
+    )
+    replace_once(
+        root,
+        "drivers/crypto/virtio/virtio_crypto_core.c",
+        """\tvirtio_reset_device(vdev);
+\tvirtcrypto_free_unused_reqs(vcrypto);
+\tif (virtcrypto_dev_started(vcrypto))""",
+        """\tvirtio_reset_device(vdev);
+\tvirtcrypto_cancel_done_work(vcrypto);
+\tvirtcrypto_free_unused_reqs(vcrypto);
+\tif (virtcrypto_dev_started(vcrypto))""",
+        "virtio-crypto-freeze-drains-work-before-detach",
+    )
     replace_once(
         root,
         "drivers/crypto/virtio/virtio_crypto_common.h",
@@ -259,6 +310,7 @@ err_find:
 \tvirtcrypto_clean_affinity(vcrypto, -1);
 
 \tif (vcrypto->vqs_initialized) {
+\t\tvirtcrypto_cancel_done_work(vcrypto);
 \t\tvdev->config->del_vqs(vdev);
 \t\tvcrypto->vqs_initialized = false;
 \t}
@@ -887,7 +939,7 @@ out:
         "virtio-net-del-only-live-vqs",
     )
 
-    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied-with-idempotent-transport-state")
+    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied-with-idempotent-transport-state-and-work-drain")
     return 0
 
 
