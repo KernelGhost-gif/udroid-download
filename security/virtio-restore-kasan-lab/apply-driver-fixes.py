@@ -350,7 +350,8 @@ err_find:
 \tstruct port_buffer *buf;
 \tunsigned int len;
 
-\tif (port->inbuf)""",
+\tif (port->inbuf)
+\t\treturn port->inbuf;""",
         """static struct port_buffer *get_inbuf(struct port *port)
 {
 \tstruct port_buffer *buf;
@@ -464,6 +465,42 @@ err_find:
 \t}
 \tspin_unlock_irqrestore(&port->outvq_lock, irqflags);""",
         "virtio-console-splice-rproc-check-under-outvq-lock",
+    )
+    replace_once(
+        root,
+        "drivers/char/virtio_console.c",
+        """\tremove_port_data(port);
+
+\t/*
+\t * Null out portdev under outvq_lock so that __send_to_port()
+\t * cannot race: it checks port->portdev inside the same lock
+\t * and bails out if NULL, preventing any buffer from being
+\t * enqueued to an already torn-down virtqueue.  Also prevents
+\t * a close on an open port later from sending a stale control
+\t * message.
+\t */
+\tspin_lock_irq(&port->outvq_lock);
+\tport->portdev = NULL;
+\tspin_unlock_irq(&port->outvq_lock);""",
+        """\tremove_port_data(port);
+
+\tspin_lock_irq(&port->inbuf_lock);
+\tport->in_vq = NULL;
+\tspin_unlock_irq(&port->inbuf_lock);
+
+\t/*
+\t * Null out portdev under outvq_lock so that __send_to_port()
+\t * cannot race: it checks port->portdev inside the same lock
+\t * and bails out if NULL, preventing any buffer from being
+\t * enqueued to an already torn-down virtqueue.  Also prevents
+\t * a close on an open port later from sending a stale control
+\t * message.
+\t */
+\tspin_lock_irq(&port->outvq_lock);
+\tport->out_vq = NULL;
+\tport->portdev = NULL;
+\tspin_unlock_irq(&port->outvq_lock);""",
+        "virtio-console-unplug-clears-queue-handles",
     )
     replace_once(
         root,
@@ -1024,7 +1061,7 @@ out:
         "virtio-net-del-only-live-vqs",
     )
 
-    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied-with-idempotent-transport-state-work-drain-and-hvc-guards")
+    print("DRIVER_FIX_RESULT=all-six-driver-overlay-groups-applied-with-idempotent-transport-state-work-drain-and-hvc-unplug-guards")
     return 0
 
 
