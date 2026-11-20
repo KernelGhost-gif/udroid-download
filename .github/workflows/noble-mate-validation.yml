@@ -52,13 +52,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            git build-essential binfmt-support qemu-user-static debootstrap
+            git build-essential binfmt-support qemu-user-static debootstrap util-linux
 
       - name: Run regression tests
         run: python3 -m unittest discover -s tests -v
 
       - name: Build Noble MATE ARM64 rootfs
-        run: sudo bash build.sh -s noble -v mateRaw -a arm64
+        run: script --quiet --return --command 'sudo bash build.sh -s noble -v mateRaw -a arm64' /dev/null
 
       - name: Validate the generated rootfs
         run: |
