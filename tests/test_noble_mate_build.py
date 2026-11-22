@@ -119,6 +119,7 @@ do_unmount() { :; }
         self.assertIn("dbus-daemon --system --fork", fixes)
         self.assertIn("dbus-run-session -- mate-session", fixes)
         self.assertIn("UDROID_MATE_RUNTIME_DIR", fixes)
+        self.assertIn("XKB_CONFIG_ROOT=/usr/share/X11/xkb", fixes)
 
     def test_launcher_runs_mate_after_starting_the_system_bus(self):
         with tempfile.TemporaryDirectory() as directory:
