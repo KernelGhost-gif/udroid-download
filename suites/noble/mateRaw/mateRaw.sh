@@ -30,14 +30,14 @@ EOF_SOURCES
 }
 
 case "${1:-arm64}" in
-    arm64) _arch="arm64" ;;
+    arm64|amd64) _arch="$1" ;;
     all) _arch="arm64" ;;
     *)
-        die "Noble MATE supports ARM64 only (usage: $0 [arm64|all])"
+        die "Noble MATE supports ARM64 and AMD64 (usage: $0 [arm64|amd64|all])"
         ;;
 esac
 
-build_target="${frn}-arm64"
+build_target="${frn}-${_arch}"
 build_complete=false
 cleanup_build() {
     if [ "$build_complete" = false ]; then
@@ -57,4 +57,4 @@ do_unmount "$build_target"
 build_complete=true
 
 shout "Noble MATE build complete. Output:"
-ls -lh "${frn}-arm64.tar.gz"
+ls -lh "${frn}-${_arch}.tar.gz"
