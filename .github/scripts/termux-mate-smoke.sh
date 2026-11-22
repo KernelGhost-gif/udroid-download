@@ -3,6 +3,8 @@ set -Eeuo pipefail
 
 ROOTFS_ARCHIVE="${GITHUB_WORKSPACE:-$PWD}/fs-cook/out/noble-mateRaw-amd64.tar.gz"
 OUT_DIR="${RUNNER_TEMP:-/tmp}/termux-mate-smoke"
+TERMUX_HOME=/data/data/com.termux/files/home
+TERMUX_PREFIX=/data/data/com.termux/files/usr
 mkdir -p "$OUT_DIR"
 test -s "$ROOTFS_ARCHIVE"
 
@@ -17,9 +19,14 @@ collect_diagnostics() {
   adb shell dumpsys package > "$OUT_DIR/android-packages.txt" 2>&1
   adb shell screencap -p /sdcard/termux-mate-screen.png >/dev/null 2>&1
   adb pull /sdcard/termux-mate-screen.png "$OUT_DIR/termux-mate-screen.png" >/dev/null 2>&1
-  adb shell run-as com.termux /system/bin/sh -c \
-    'for f in mate-session.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt; do if [ -f /data/data/com.termux/files/home/$f ]; then echo "===== $f ====="; cat /data/data/com.termux/files/home/$f; fi; done' \
-    > "$OUT_DIR/termux-runtime-logs.txt" 2>&1
+  adb shell run-as com.termux /system/bin/ls -l "$TERMUX_PREFIX/bin/bash" \
+    > "$OUT_DIR/termux-bash-file.txt" 2>&1
+  : > "$OUT_DIR/termux-runtime-logs.txt"
+  for f in mate-session.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt; do
+    echo "===== $f =====" >> "$OUT_DIR/termux-runtime-logs.txt"
+    adb shell run-as com.termux /system/bin/cat "$TERMUX_HOME/$f" \
+      >> "$OUT_DIR/termux-runtime-logs.txt" 2>&1 || true
+  done
   exit "$status"
 }
 trap collect_diagnostics EXIT
@@ -88,19 +95,25 @@ adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
 adb shell input keyevent 82 || true
 adb shell monkey -p com.termux 1
-echo "Waiting for Termux bootstrap..."
+echo "Waiting for Termux's second-stage bootstrap completion marker..."
 ready=false
-for attempt in $(seq 1 90); do
-  if adb shell run-as com.termux /system/bin/sh -c \
-      'test -x /data/data/com.termux/files/usr/bin/bash' >/dev/null 2>&1; then
+for attempt in $(seq 1 100); do
+  if adb logcat -d -s Termux.TermuxInstaller:I 2>/dev/null | \
+      grep -Fq "Bootstrap packages installed successfully"; then
     ready=true
     break
   fi
-  sleep 3
+  sleep 5
 done
 if [ "$ready" != true ]; then
   adb logcat -d > "$OUT_DIR/android-logcat-bootstrap.txt" || true
-  echo "Termux bootstrap did not create its bash executable"
+  echo "Termux bootstrap did not report successful completion"
+  exit 1
+fi
+if ! adb shell run-as com.termux /system/bin/ls -l "$TERMUX_PREFIX/bin/bash" \
+    > "$OUT_DIR/termux-bash-file.txt" 2>&1; then
+  echo "Termux bootstrap marker appeared but bash is not accessible via run-as"
+  cat "$OUT_DIR/termux-bash-file.txt" >&2 || true
   exit 1
 fi
 echo "Termux bootstrap is ready"
@@ -221,14 +234,23 @@ adb push "$ROOTFS_ARCHIVE" /data/local/tmp/noble-mateRaw-amd64.tar.gz
 adb push "$OUT_DIR/termux-guest-smoke.sh" /data/local/tmp/termux-guest-smoke.sh
 adb shell chmod 644 /data/local/tmp/noble-mateRaw-amd64.tar.gz
 adb shell chmod 644 /data/local/tmp/termux-guest-smoke.sh
-adb shell run-as com.termux /system/bin/sh -c \
-  'cp /data/local/tmp/noble-mateRaw-amd64.tar.gz /data/data/com.termux/files/home/noble-mateRaw-amd64.tar.gz && cp /data/local/tmp/termux-guest-smoke.sh /data/data/com.termux/files/home/termux-guest-smoke.sh'
+adb shell run-as com.termux /system/bin/cp \
+  /data/local/tmp/noble-mateRaw-amd64.tar.gz "$TERMUX_HOME/noble-mateRaw-amd64.tar.gz"
+adb shell run-as com.termux /system/bin/cp \
+  /data/local/tmp/termux-guest-smoke.sh "$TERMUX_HOME/termux-guest-smoke.sh"
 echo "::endgroup::"
 
 echo "::group::Run MATE inside real Termux PRoot and X11"
 set +e
-adb shell run-as com.termux /system/bin/sh -c \
-  'export HOME=/data/data/com.termux/files/home; export PREFIX=/data/data/com.termux/files/usr; export TMPDIR=$PREFIX/tmp; export LD_LIBRARY_PATH=$PREFIX/lib; export LD_PRELOAD=$PREFIX/lib/libtermux-exec.so; exec $PREFIX/bin/bash $HOME/termux-guest-smoke.sh' \
+adb shell run-as com.termux /system/bin/env \
+  "HOME=$TERMUX_HOME" \
+  "PREFIX=$TERMUX_PREFIX" \
+  "TMPDIR=$TERMUX_PREFIX/tmp" \
+  "PATH=$TERMUX_PREFIX/bin:/system/bin:/system/xbin" \
+  "LD_LIBRARY_PATH=$TERMUX_PREFIX/lib" \
+  "LD_PRELOAD=$TERMUX_PREFIX/lib/libtermux-exec.so" \
+  "TERM=xterm-256color" \
+  "$TERMUX_PREFIX/bin/bash" "$TERMUX_HOME/termux-guest-smoke.sh" \
   2>&1 | tee "$OUT_DIR/termux-install-and-launch.log"
 guest_status=${PIPESTATUS[0]}
 set -e
