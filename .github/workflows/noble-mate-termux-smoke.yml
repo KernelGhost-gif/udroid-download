@@ -107,6 +107,23 @@ jobs:
           gzip --test fs-cook/out/noble-mateRaw-amd64.tar.gz
           sha256sum fs-cook/out/noble-mateRaw-amd64.tar.gz
 
+      - name: Download official Termux and Termux:X11 APKs
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/termux-mate-apks"
+          mkdir -p "$out"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            --output "$out/termux.apk" \
+            "https://github.com/termux/termux-app/releases/download/v0.119.0-beta.3/termux-app_v0.119.0-beta.3%2Bapt-android-7-github-debug_x86_64.apk"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            --output "$out/termux-x11.apk" \
+            "https://github.com/termux/termux-x11/releases/download/nightly/termux-x11-universal-release.apk"
+          test -s "$out/termux.apk"
+          test -s "$out/termux-x11.apk"
+          sha256sum "$out/termux.apk" "$out/termux-x11.apk"
+
       - name: Install Termux, start Android, and launch MATE through Termux:X11
         env:
           ANDROID_I_WANT_MY_TCG: "yes"
