@@ -38,7 +38,11 @@ run_shell_script() {
 do_build() {
     chroot_dir="$1"
     t_arch="$2"
-    MIRROR="https://ports.ubuntu.com/ubuntu-ports"
+    if [ "$t_arch" = "amd64" ]; then
+        MIRROR="http://archive.ubuntu.com/ubuntu/"
+    else
+        MIRROR="http://ports.ubuntu.com/ubuntu-ports/"
+    fi
     mkdir -p "$chroot_dir/etc/apt"
     additional_setup
     cp "$chroot_dir/etc/apt/sources.list" "$RECORD"
@@ -68,12 +72,22 @@ do_unmount() { :; }
         )
         self.assertEqual(archives, ["noble-mateRaw-arm64.tar.gz"])
 
+    def test_noble_mate_build_sets_sources_and_packs_amd64(self):
+        result, sources, invoked, archives = self.run_build("amd64")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("noble main restricted universe multiverse", sources)
+        self.assertEqual(
+            invoked,
+            ["mateRaw-setup.sh", "mateRaw-fixes.sh", "mateRaw-cleanup.sh"],
+        )
+        self.assertEqual(archives, ["noble-mateRaw-amd64.tar.gz"])
+
     def test_rejects_unsupported_architectures_without_creating_archive(self):
-        result, _, _, archives = self.run_build("amd64")
+        result, _, _, archives = self.run_build("armhf")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(archives, [])
 
-    def test_matrix_contains_only_noble_mate_arm64(self):
+    def test_matrix_contains_noble_mate_arm64_and_amd64(self):
         matrix = subprocess.check_output(
             [sys.executable, "gen_data/gen-suite-matrix.py"],
             cwd=ROOT, text=True,
@@ -83,11 +97,10 @@ do_unmount() { :; }
             row for row in rows
             if row["suite"] == "noble" and row["variant"] == "mateRaw"
         ]
-        self.assertEqual(matches, [{
-            "suite": "noble",
-            "variant": "mateRaw",
-            "architecture": "arm64",
-        }])
+        self.assertEqual(matches, [
+            {"suite": "noble", "variant": "mateRaw", "architecture": "arm64"},
+            {"suite": "noble", "variant": "mateRaw", "architecture": "amd64"},
+        ])
 
     def test_setup_is_lightweight_and_uses_noble_mate_packages(self):
         setup = (VARIANT / "mateRaw-setup.sh").read_text()
