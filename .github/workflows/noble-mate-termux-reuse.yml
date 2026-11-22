@@ -35,9 +35,136 @@ jobs:
           test -s "$archive"
           gzip --test "$archive"
           sha256sum "$archive"
-          tar -tzf "$archive" | grep -E '(^|/)usr/bin/mate-session$'
-          tar -tzf "$archive" | grep -E '(^|/)usr/bin/mate-panel$'
+          tar -tzf "$archive" | grep -E '(^|/)usr/bin/mate-session      - name: Download official Termux and Termux:X11 APKs
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/termux-mate-apks"
+          mkdir -p "$out"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            --output "$out/termux.apk" \
+            "https://github.com/termux/termux-app/releases/download/v0.119.0-beta.3/termux-app_v0.119.0-beta.3%2Bapt-android-7-github-debug_x86_64.apk"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            --output "$out/termux-x11.apk" \
+            "https://github.com/termux/termux-x11/releases/download/nightly/termux-x11-universal-release.apk"
+          test -s "$out/termux.apk"
+          test -s "$out/termux-x11.apk"
+          sha256sum "$out/termux.apk" "$out/termux-x11.apk"
 
+      - name: Install Termux and run Noble MATE under Termux PRoot/X11
+        env:
+          ANDROID_I_WANT_MY_TCG: "yes"
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 4096M
+          heap-size: 512M
+          sdcard-path-or-size: 6G
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none
+          disable-animations: true
+          emulator-boot-timeout: 1200
+          script: bash .github/scripts/termux-mate-smoke.sh
+
+      - name: Upload Termux, X11, MATE logs and emulator screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noble-mate-termux-reuse-diagnostics
+          path: ${{ runner.temp }}/termux-mate-smoke/
+          if-no-files-found: ignore
+          retention-days: 7
+
+          tar -tzf "$archive" | grep -E '(^|/)usr/bin/mate-panel      - name: Download official Termux and Termux:X11 APKs
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/termux-mate-apks"
+          mkdir -p "$out"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            --output "$out/termux.apk" \
+            "https://github.com/termux/termux-app/releases/download/v0.119.0-beta.3/termux-app_v0.119.0-beta.3%2Bapt-android-7-github-debug_x86_64.apk"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            --output "$out/termux-x11.apk" \
+            "https://github.com/termux/termux-x11/releases/download/nightly/termux-x11-universal-release.apk"
+          test -s "$out/termux.apk"
+          test -s "$out/termux-x11.apk"
+          sha256sum "$out/termux.apk" "$out/termux-x11.apk"
+
+      - name: Install Termux and run Noble MATE under Termux PRoot/X11
+        env:
+          ANDROID_I_WANT_MY_TCG: "yes"
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 4096M
+          heap-size: 512M
+          sdcard-path-or-size: 6G
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none
+          disable-animations: true
+          emulator-boot-timeout: 1200
+          script: bash .github/scripts/termux-mate-smoke.sh
+
+      - name: Upload Termux, X11, MATE logs and emulator screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noble-mate-termux-reuse-diagnostics
+          path: ${{ runner.temp }}/termux-mate-smoke/
+          if-no-files-found: ignore
+          retention-days: 7
+
+
+      - name: Flatten rootfs hard links for Android app storage
+        run: |
+          set -euo pipefail
+          archive="fs-cook/out/noble-mateRaw-amd64.tar.gz"
+          staging="$RUNNER_TEMP/noble-mate-amd64-unpacked"
+          flattened="$RUNNER_TEMP/noble-mateRaw-amd64-flat.tar.gz"
+          rm -rf "$staging"
+          mkdir -p "$staging"
+          tar --extract --gzip --file "$archive" --directory "$staging"
+
+          tar --hard-dereference --one-file-system \
+            --exclude='./data' \
+            --exclude='./apex' \
+            --exclude='./vendor' \
+            --exclude='./system' \
+            --exclude='./sdcard' \
+            --exclude='./dev/*' \
+            --exclude='./proc/*' \
+            --exclude='./sys/*' \
+            --exclude='./tmp/*' \
+            --exclude='./mnt/*' \
+            --exclude='./media/*' \
+            --exclude='./lost+found/*' \
+            --exclude='./gz-packer.sh' \
+            --exclude='*.l2s.*' \
+            --exclude-caches-all \
+            --create --gzip --file "$flattened" \
+            --directory "$staging" .
+
+          gzip --test "$flattened"
+          python3 - "$flattened" <<'PY'
+          import sys
+          import tarfile
+
+          with tarfile.open(sys.argv[1], "r:gz") as archive:
+              for member in archive:
+                  if member.islnk():
+                      raise SystemExit(f"hard-link member remains: {member.name}")
+          PY
+          mv "$flattened" "$archive"
+          sha256sum "$archive"
       - name: Download official Termux and Termux:X11 APKs
         run: |
           set -euo pipefail
