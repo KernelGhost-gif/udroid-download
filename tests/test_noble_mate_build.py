@@ -99,7 +99,7 @@ do_unmount() { :; }
         self.assertEqual(archives, ["noble-mateRaw-arm64.tar.gz"])
         self.assertIn("--hard-dereference", tar_args)
         self.assertIn("--one-file-system", tar_args)
-        self.assertIn("--exclude='./dev/*'", tar_args)
+        self.assertIn("--exclude=./dev/*", tar_args)
 
     def test_noble_mate_build_sets_sources_and_packs_amd64(self):
         result, sources, invoked, archives, tar_args = self.run_build("amd64")
