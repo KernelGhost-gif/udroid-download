@@ -130,14 +130,13 @@ jobs:
           ANDROID_I_WANT_MY_TCG: "yes"
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
-          target: google_apis
+          api-level: 35
+          target: default
           arch: x86_64
-          profile: pixel_2
+          profile: pixel_5
           cores: 4
           ram-size: 4096M
           heap-size: 512M
-          sdcard-path-or-size: 6G
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -camera-back none
           disable-animations: true
           emulator-boot-timeout: 1200
