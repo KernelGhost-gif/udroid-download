@@ -8,7 +8,7 @@ SUITES_DIR="./suites"
 # it has high priority over the architecture specified in the suite
 # set it to "all" to build all architectures defined in the <suite>/<varient>.sh file
 # "all" is currently broken!
-ARCHITECTURES = ["arm64", "armhf"]
+ARCHITECTURES = ["amd64", "arm64", "armhf"]
 
 
 def variant_architectures(variant_path: str) -> list[str]:
