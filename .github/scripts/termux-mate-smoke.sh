@@ -6,28 +6,20 @@ OUT_DIR="${RUNNER_TEMP:-/tmp}/termux-mate-smoke"
 mkdir -p "$OUT_DIR"
 test -s "$ROOTFS_ARCHIVE"
 
-echo "::group::Download official Termux and Termux:X11 APKs"
-curl --fail --silent --show-error --location \
-  "https://api.github.com/repos/termux/termux-app/releases?per_page=10" \
-  -o "$OUT_DIR/termux-releases.json"
-TERMUX_APK_URL="$(jq -r '[.[] | .assets[]? | select(.name | endswith("apt-android-7-github-debug_x86_64.apk"))][0].browser_download_url // empty' "$OUT_DIR/termux-releases.json")"
-test -n "$TERMUX_APK_URL" || { echo "No x86_64 Android 7+ Termux APK asset found"; exit 1; }
-curl --fail --location --retry 4 --retry-all-errors "$TERMUX_APK_URL" -o "$OUT_DIR/termux.apk"
-
-curl --fail --silent --show-error --location \
-  "https://api.github.com/repos/termux/termux-x11/releases/tags/nightly" \
-  -o "$OUT_DIR/termux-x11-release.json"
-X11_APK_URL="$(jq -r '.assets[] | select(.name == "termux-x11-universal-release.apk") | .browser_download_url' "$OUT_DIR/termux-x11-release.json" | head -n 1)"
-test -n "$X11_APK_URL" || { echo "No Termux:X11 universal release APK found"; exit 1; }
-curl --fail --location --retry 4 --retry-all-errors "$X11_APK_URL" -o "$OUT_DIR/termux-x11.apk"
-echo "Termux APK: $TERMUX_APK_URL"
-echo "Termux:X11 APK: $X11_APK_URL"
+echo "::group::Check predownloaded official Termux and Termux:X11 APKs"
+TERMUX_APK="${RUNNER_TEMP:-/tmp}/termux-mate-apks/termux.apk"
+X11_APK="${RUNNER_TEMP:-/tmp}/termux-mate-apks/termux-x11.apk"
+test -s "$TERMUX_APK" || { echo "Termux APK missing: $TERMUX_APK"; exit 1; }
+test -s "$X11_APK" || { echo "Termux:X11 APK missing: $X11_APK"; exit 1; }
+sha256sum "$TERMUX_APK" "$X11_APK"
+echo "Termux APK ready: $TERMUX_APK"
+echo "Termux:X11 APK ready: $X11_APK"
 echo "::endgroup::"
 
 echo "::group::Install Android applications"
 adb wait-for-device
-adb install -r "$OUT_DIR/termux.apk"
-adb install -r "$OUT_DIR/termux-x11.apk"
+adb install -r "$TERMUX_APK"
+adb install -r "$X11_APK"
 adb shell settings put system screen_off_timeout 1800000
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
