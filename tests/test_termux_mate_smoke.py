@@ -31,6 +31,16 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertNotIn('adb install -r "$TERMUX_APK"', self.content)
         self.assertNotIn('adb install -r "$X11_APK"', self.content)
 
+    def test_waits_for_the_real_termux_bootstrap_completion_marker(self):
+        self.assertIn("Termux.TermuxInstaller:I", self.content)
+        self.assertIn("Bootstrap packages installed successfully", self.content)
+        self.assertIn('adb shell run-as com.termux /system/bin/ls -l "$TERMUX_PREFIX/bin/bash"', self.content)
+
+    def test_avoids_nested_remote_shell_quoting_for_run_as(self):
+        self.assertIn("adb shell run-as com.termux /system/bin/cp", self.content)
+        self.assertIn("adb shell run-as com.termux /system/bin/env", self.content)
+        self.assertNotIn("run-as com.termux /system/bin/sh -c", self.content)
+
     def test_retries_when_android_package_manager_is_not_ready(self):
         self.assertIn("wait_for_package_manager()", self.content)
         self.assertIn("for attempt in $(seq 1 45)", self.content)
