@@ -30,7 +30,7 @@ EOF_SOURCES
 }
 
 case "${1:-arm64}" in
-    arm64|amd64) _arch="$1" ;;
+    arm64|amd64) _arch="${1:-arm64}" ;;
     all) _arch="arm64" ;;
     *)
         die "Noble MATE supports ARM64 and AMD64 (usage: $0 [arm64|amd64|all])"
@@ -46,7 +46,7 @@ cleanup_build() {
 }
 trap cleanup_build EXIT
 
-shout "Bootstrapping Ubuntu Noble MATE [arm64]..."
+shout "Bootstrapping Ubuntu Noble MATE [${_arch}]..."
 do_build "$build_target" "$_arch"
 
 shout "Packing Noble MATE root filesystem..."
