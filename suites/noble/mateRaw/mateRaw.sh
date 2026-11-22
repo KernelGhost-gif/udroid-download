@@ -49,12 +49,35 @@ trap cleanup_build EXIT
 shout "Bootstrapping Ubuntu Noble MATE [${_arch}]..."
 do_build "$build_target" "$_arch"
 
-shout "Packing Noble MATE root filesystem..."
-do_compress "$build_target"
-
 shout "Unmounting Noble MATE root filesystem..."
 do_unmount "$build_target"
 build_complete=true
 
+# Android's Termux app sandbox can reject hard-link creation while extracting
+# a rootfs. Store each hard-linked path as a regular file so tar extraction
+# works without root privileges or linkat permissions inside the app sandbox.
+archive="${build_target}.tar.gz"
+shout "Packing a Termux-compatible Noble MATE root filesystem..."
+$SUDO tar \
+    --hard-dereference \
+    --one-file-system \
+    --exclude='./data' \
+    --exclude='./apex' \
+    --exclude='./vendor' \
+    --exclude='./system' \
+    --exclude='./sdcard' \
+    --exclude='./dev/*' \
+    --exclude='./proc/*' \
+    --exclude='./sys/*' \
+    --exclude='./tmp/*' \
+    --exclude='./mnt/*' \
+    --exclude='./media/*' \
+    --exclude='./lost+found/*' \
+    --exclude='*.l2s.*' \
+    --exclude-caches-all \
+    -czf "$archive" \
+    -C "$build_target" .
+gzip --test "$archive" || die "Termux-compatible rootfs archive is corrupt"
+
 shout "Noble MATE build complete. Output:"
-ls -lh "${frn}-${_arch}.tar.gz"
+ls -lh "$archive"
