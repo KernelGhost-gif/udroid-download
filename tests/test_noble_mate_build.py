@@ -24,6 +24,25 @@ class NobleMateBuildTest(unittest.TestCase):
                     shutil.copy2(source, work / source.name)
             record = work / "sources.list"
             calls = work / "calls.txt"
+            tar_record = work / "tar-args.txt"
+            bindir = work / "bin"
+            bindir.mkdir()
+            fake_tar = bindir / "tar"
+            fake_tar.write_text("""#!/usr/bin/env bash
+set -Eeuo pipefail
+printf '%s\\n' "$*" >> "$TAR_RECORD"
+while (($#)); do
+    if [[ "$1" == "-czf" ]]; then
+        shift
+        printf 'mock rootfs archive\\n' | gzip -c > "$1"
+        exit 0
+    fi
+    shift
+done
+echo "tar output path missing" >&2
+exit 2
+""")
+            fake_tar.chmod(0o755)
             (work / "plugins/envsetup").write_text(r"""
 ROOT_DIR="$PWD"
 SUDO=""
@@ -53,15 +72,22 @@ do_unmount() { :; }
             result = subprocess.run(
                 ["bash", str(VARIANT / "mateRaw.sh"), architecture],
                 cwd=work, capture_output=True, text=True,
-                env={**os.environ, "RECORD": str(record), "CALLS": str(calls)},
+                env={
+                    **os.environ,
+                    "PATH": f"{bindir}:{os.environ['PATH']}",
+                    "RECORD": str(record),
+                    "CALLS": str(calls),
+                    "TAR_RECORD": str(tar_record),
+                },
             )
             sources = record.read_text() if record.exists() else ""
             invoked = calls.read_text().splitlines() if calls.exists() else []
             archives = [p.name for p in work.glob("out/*.tar.gz")]
-            return result, sources, invoked, archives
+            tar_args = tar_record.read_text() if tar_record.exists() else ""
+            return result, sources, invoked, archives, tar_args
 
     def test_noble_mate_build_sets_sources_and_packs_arm64(self):
-        result, sources, invoked, archives = self.run_build()
+        result, sources, invoked, archives, tar_args = self.run_build()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("noble main restricted universe multiverse", sources)
         self.assertIn("noble-updates", sources)
@@ -71,9 +97,12 @@ do_unmount() { :; }
             ["mateRaw-setup.sh", "mateRaw-fixes.sh", "mateRaw-cleanup.sh"],
         )
         self.assertEqual(archives, ["noble-mateRaw-arm64.tar.gz"])
+        self.assertIn("--hard-dereference", tar_args)
+        self.assertIn("--one-file-system", tar_args)
+        self.assertIn("--exclude='./dev/*'", tar_args)
 
     def test_noble_mate_build_sets_sources_and_packs_amd64(self):
-        result, sources, invoked, archives = self.run_build("amd64")
+        result, sources, invoked, archives, tar_args = self.run_build("amd64")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("noble main restricted universe multiverse", sources)
         self.assertEqual(
@@ -81,9 +110,10 @@ do_unmount() { :; }
             ["mateRaw-setup.sh", "mateRaw-fixes.sh", "mateRaw-cleanup.sh"],
         )
         self.assertEqual(archives, ["noble-mateRaw-amd64.tar.gz"])
+        self.assertIn("--hard-dereference", tar_args)
 
     def test_rejects_unsupported_architectures_without_creating_archive(self):
-        result, _, _, archives = self.run_build("armhf")
+        result, _, _, archives, _ = self.run_build("armhf")
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(archives, [])
 
