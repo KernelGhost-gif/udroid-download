@@ -6,6 +6,24 @@ OUT_DIR="${RUNNER_TEMP:-/tmp}/termux-mate-smoke"
 mkdir -p "$OUT_DIR"
 test -s "$ROOTFS_ARCHIVE"
 
+collect_diagnostics() {
+  local status=$?
+  trap - EXIT
+  set +e
+  adb devices -l > "$OUT_DIR/adb-devices.txt" 2>&1
+  adb logcat -d > "$OUT_DIR/android-logcat.txt" 2>&1
+  adb shell getprop > "$OUT_DIR/android-getprop.txt" 2>&1
+  adb shell dumpsys window > "$OUT_DIR/android-window.txt" 2>&1
+  adb shell dumpsys package > "$OUT_DIR/android-packages.txt" 2>&1
+  adb shell screencap -p /sdcard/termux-mate-screen.png >/dev/null 2>&1
+  adb pull /sdcard/termux-mate-screen.png "$OUT_DIR/termux-mate-screen.png" >/dev/null 2>&1
+  adb shell run-as com.termux /system/bin/sh -c \
+    'for f in mate-session.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt; do if [ -f /data/data/com.termux/files/home/$f ]; then echo "===== $f ====="; cat /data/data/com.termux/files/home/$f; fi; done' \
+    > "$OUT_DIR/termux-runtime-logs.txt" 2>&1
+  exit "$status"
+}
+trap collect_diagnostics EXIT
+
 echo "::group::Check predownloaded official Termux and Termux:X11 APKs"
 TERMUX_APK="${RUNNER_TEMP:-/tmp}/termux-mate-apks/termux.apk"
 X11_APK="${RUNNER_TEMP:-/tmp}/termux-mate-apks/termux-x11.apk"
@@ -16,10 +34,54 @@ echo "Termux APK ready: $TERMUX_APK"
 echo "Termux:X11 APK ready: $X11_APK"
 echo "::endgroup::"
 
+wait_for_package_manager() {
+  for attempt in $(seq 1 45); do
+    if adb shell pm list packages >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "Android package manager did not become ready" >&2
+  return 1
+}
+
+install_apk_without_streaming() {
+  local apk="$1"
+  local remote_path="$2"
+  local package_name="$3"
+
+  echo "Pushing $apk to Android filesystem"
+  adb push "$apk" "$remote_path"
+
+  for attempt in $(seq 1 4); do
+    if adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
+      echo "$package_name is already installed"
+      return 0
+    fi
+
+    echo "Installing $package_name with local pm install (attempt $attempt/4)"
+    if adb shell pm install -r "$remote_path"; then
+      if adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
+        echo "$package_name installed successfully"
+        return 0
+      fi
+    fi
+
+    echo "Package installation attempt $attempt failed; waiting for Android package manager"
+    sleep 5
+    wait_for_package_manager
+  done
+
+  echo "Failed to install $package_name" >&2
+  adb logcat -d -t 1000 >&2 || true
+  return 1
+}
+
 echo "::group::Install Android applications"
 adb wait-for-device
-adb install -r "$TERMUX_APK"
-adb install -r "$X11_APK"
+wait_for_package_manager
+install_apk_without_streaming "$TERMUX_APK" /data/local/tmp/termux.apk com.termux
+install_apk_without_streaming "$X11_APK" /data/local/tmp/termux-x11.apk com.termux.x11
 adb shell settings put system screen_off_timeout 1800000
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
@@ -170,16 +232,6 @@ adb shell run-as com.termux /system/bin/sh -c \
   2>&1 | tee "$OUT_DIR/termux-install-and-launch.log"
 guest_status=${PIPESTATUS[0]}
 set -e
-echo "::endgroup::"
-
-echo "::group::Collect Android, Termux, X11 and MATE diagnostics"
-adb shell screencap -p /sdcard/termux-mate-screen.png >/dev/null 2>&1 || true
-adb pull /sdcard/termux-mate-screen.png "$OUT_DIR/termux-mate-screen.png" >/dev/null 2>&1 || true
-adb logcat -d > "$OUT_DIR/android-logcat.txt" || true
-adb shell dumpsys window > "$OUT_DIR/android-window.txt" || true
-adb shell run-as com.termux /system/bin/sh -c \
-  'for f in mate-session.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt; do if [ -f /data/data/com.termux/files/home/$f ]; then echo "===== $f ====="; cat /data/data/com.termux/files/home/$f; fi; done' \
-  > "$OUT_DIR/termux-runtime-logs.txt" 2>&1 || true
 echo "::endgroup::"
 
 if [ "$guest_status" -ne 0 ]; then
