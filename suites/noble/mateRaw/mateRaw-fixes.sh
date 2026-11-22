@@ -19,6 +19,7 @@ export XDG_CURRENT_DESKTOP=MATE
 export XDG_SESSION_DESKTOP=mate
 export DESKTOP_SESSION=mate
 export GDK_BACKEND=x11
+export XKB_CONFIG_ROOT=/usr/share/X11/xkb
 export GSK_RENDERER="${GSK_RENDERER:-cairo}"
 EOF_PROFILE
 chmod 0644 /etc/profile.d/mate-termux-x11.sh
