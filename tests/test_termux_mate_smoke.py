@@ -51,6 +51,11 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn('adb logcat -d > "$OUT_DIR/android-logcat.txt"', self.content)
         self.assertIn('adb pull /sdcard/termux-mate-screen.png "$OUT_DIR/termux-mate-screen.png"', self.content)
 
+    def test_pregrants_android_notification_permission_for_x11(self):
+        self.assertIn("pm grant com.termux android.permission.POST_NOTIFICATIONS", self.content)
+        self.assertIn("pm grant com.termux.x11 android.permission.POST_NOTIFICATIONS", self.content)
+        self.assertIn("cmd appops set com.termux.x11 POST_NOTIFICATION allow", self.content)
+
     def test_clears_termux_exec_preload_before_starting_proot(self):
         self.assertIn("unset LD_PRELOAD", self.content)
         self.assertIn('nohup "$PREFIX/bin/proot" \\', self.content)
