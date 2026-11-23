@@ -5,6 +5,8 @@ on:
     branches: [feat/noble-mate-clean]
     paths:
       - ".github/workflows/noble-mate-termux-reuse.yml"
+      - ".github/scripts/termux-mate-smoke.sh"
+      - "tests/test_termux_mate_smoke.py"
   workflow_dispatch:
 
 permissions:
