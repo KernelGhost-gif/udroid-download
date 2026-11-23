@@ -178,7 +178,12 @@ if [ ! -S "$TMPDIR/.X11-unix/X0" ]; then
 fi
 
 log "Launching MATE inside the Noble rootfs using Termux's own proot"
-nohup proot \
+# termux-exec rewrites absolute executable paths for Android. That behavior
+# is invalid inside PRoot and makes /usr/bin/env resolve to a Termux path.
+# Keep Termux's LD_LIBRARY_PATH for the host proot binary, but remove the
+# preload before PRoot starts so guest executable paths stay guest-relative.
+unset LD_PRELOAD
+nohup "$PREFIX/bin/proot" \
   --link2symlink \
   --sysvipc \
   -0 \
