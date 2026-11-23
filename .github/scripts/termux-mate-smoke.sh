@@ -89,6 +89,11 @@ adb wait-for-device
 wait_for_package_manager
 install_apk_without_streaming "$TERMUX_APK" /data/local/tmp/termux.apk com.termux
 install_apk_without_streaming "$X11_APK" /data/local/tmp/termux-x11.apk com.termux.x11
+# Avoid a first-launch Android notification prompt interrupting Termux:X11.
+adb shell pm grant com.termux android.permission.POST_NOTIFICATIONS 2>/dev/null || true
+adb shell pm grant com.termux.x11 android.permission.POST_NOTIFICATIONS 2>/dev/null || true
+adb shell cmd appops set com.termux POST_NOTIFICATION allow 2>/dev/null || true
+adb shell cmd appops set com.termux.x11 POST_NOTIFICATION allow 2>/dev/null || true
 adb shell settings put system screen_off_timeout 1800000
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
