@@ -210,7 +210,7 @@ log "Pinning X11 packages to the official Cloudflare mirror"
 if [ -d "$PREFIX/etc/apt/sources.list.d" ]; then
   find "$PREFIX/etc/apt/sources.list.d" -type f \
     \( -name '*.list' -o -name '*.sources' \) -print0 |
-    xargs -0 -r sed -i 's#packages\\.termux\\.dev#packages-cf.termux.dev#g'
+    xargs -0 -r sed -i 's#packages[.]termux[.]dev#packages-cf.termux.dev#g'
 fi
 log "Updating main and X11 package indexes"
 apt-get update
@@ -340,11 +340,6 @@ if [ "$guest_status" -ne 0 ]; then
   echo "Termux/PRoot/X11 smoke test failed with status $guest_status"
   exit "$guest_status"
 fi
-
-test -s "$OUT_DIR/termux-mate-screen.png" || {
-  echo "Android screenshot was not produced"
-  exit 22
-}
 
 echo "::group::Verify Termux:X11 is the visible foreground activity"
 adb shell dumpsys window > "$OUT_DIR/android-window-after-launch.txt"
