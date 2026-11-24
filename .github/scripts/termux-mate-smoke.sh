@@ -48,12 +48,12 @@ echo "Termux:X11 APK ready: $X11_APK"
 echo "::endgroup::"
 
 wait_for_package_manager() {
-  for attempt in $(seq 1 45); do
-    if timeout --foreground --signal=TERM --kill-after=5s 10s \
+  for attempt in $(seq 1 30); do
+    if timeout --foreground --signal=TERM --kill-after=3s 3s \
         adb shell pm list packages >/dev/null 2>&1; then
       return 0
     fi
-    sleep 2
+    sleep 1
   done
   echo "Android package manager did not become ready" >&2
   return 1
@@ -65,19 +65,19 @@ install_apk_without_streaming() {
   local package_name="$3"
 
   echo "Pushing $apk to Android filesystem"
-  adb push "$apk" "$remote_path"
+  timeout --foreground --signal=TERM --kill-after=10s 60s adb push "$apk" "$remote_path"
 
-  for attempt in $(seq 1 4); do
-    if timeout --foreground --signal=TERM --kill-after=5s 15s \
+  for attempt in $(seq 1 2); do
+    if timeout --foreground --signal=TERM --kill-after=3s 10s \
         adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
       echo "$package_name is already installed"
       return 0
     fi
 
     echo "Installing $package_name with local pm install (attempt $attempt/4)"
-    if timeout --foreground --signal=TERM --kill-after=15s 180s \
+    if timeout --foreground --signal=TERM --kill-after=10s 120s \
         adb shell pm install -r "$remote_path"; then
-      if adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
+      if timeout --foreground --signal=TERM --kill-after=3s 10s adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
         echo "$package_name installed successfully"
         return 0
       fi
