@@ -74,7 +74,7 @@ install_apk_without_streaming() {
       return 0
     fi
 
-    echo "Installing $package_name with local pm install (attempt $attempt/4)"
+    echo "Installing $package_name with local pm install (attempt $attempt/2)"
     if timeout --foreground --signal=TERM --kill-after=10s 120s \
         adb shell pm install -r "$remote_path"; then
       if timeout --foreground --signal=TERM --kill-after=3s 10s adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
