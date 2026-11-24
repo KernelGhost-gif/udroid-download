@@ -13,6 +13,9 @@ collect_diagnostics() {
   trap - EXIT
   set +e
   adb devices -l > "$OUT_DIR/adb-devices.txt" 2>&1
+  adb reverse --list > "$OUT_DIR/adb-reverse.txt" 2>&1
+  adb shell dumpsys connectivity > "$OUT_DIR/android-connectivity.txt" 2>&1
+  adb shell ip route > "$OUT_DIR/android-ip-route.txt" 2>&1
   adb logcat -d > "$OUT_DIR/android-logcat.txt" 2>&1
   adb shell getprop > "$OUT_DIR/android-getprop.txt" 2>&1
   adb shell dumpsys window > "$OUT_DIR/android-window.txt" 2>&1
@@ -87,6 +90,36 @@ install_apk_without_streaming() {
 echo "::group::Install Android applications"
 adb wait-for-device
 wait_for_package_manager
+
+echo "::group::Start host-side HTTPS proxy and reverse it into Android"
+python3 "$GITHUB_WORKSPACE/.github/scripts/termux-ci-connect-proxy.py" \
+  > "$OUT_DIR/termux-ci-proxy.log" 2>&1 &
+proxy_pid=$!
+echo "$proxy_pid" > "$OUT_DIR/termux-ci-proxy.pid"
+proxy_ready=false
+for attempt in $(seq 1 30); do
+  if python3 -c 'import socket; s=socket.create_connection(("127.0.0.1", 3128), 1); s.close()' 2>/dev/null; then
+    proxy_ready=true
+    break
+  fi
+  sleep 1
+done
+if [ "$proxy_ready" != true ]; then
+  cat "$OUT_DIR/termux-ci-proxy.log" >&2 || true
+  echo "Host HTTPS proxy did not start" >&2
+  exit 30
+fi
+curl --fail --silent --show-error --location \
+  --proxy http://127.0.0.1:3128 --noproxy "" \
+  --connect-timeout 15 --max-time 60 \
+  https://packages-cf.termux.dev/apt/termux-main/dists/stable/InRelease \
+  --output "$OUT_DIR/termux-main-InRelease"
+test -s "$OUT_DIR/termux-main-InRelease"
+adb reverse tcp:3128 tcp:3128
+adb reverse --list | tee "$OUT_DIR/adb-reverse-ready.txt"
+echo "Termux HTTPS repository reachable through the host tunnel"
+echo "::endgroup::"
+
 install_apk_without_streaming "$TERMUX_APK" /data/local/tmp/termux.apk com.termux
 install_apk_without_streaming "$X11_APK" /data/local/tmp/termux-x11.apk com.termux.x11
 # Avoid a first-launch Android notification prompt interrupting Termux:X11.
@@ -135,19 +168,53 @@ export PATH="$PREFIX/bin:/system/bin:/system/xbin"
 export LD_LIBRARY_PATH="$PREFIX/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export LD_PRELOAD="$PREFIX/lib/libtermux-exec.so${LD_PRELOAD:+:$LD_PRELOAD}"
 export TERM=xterm-256color
+export http_proxy=http://127.0.0.1:3128
+export https_proxy=http://127.0.0.1:3128
+export HTTP_PROXY="$https_proxy"
+export HTTPS_PROXY="$https_proxy"
+export NO_PROXY=localhost,127.0.0.1,::1
 mkdir -p "$HOME" "$TMPDIR"
+
+# Use the official Cloudflare-cached Termux mirrors directly. This avoids
+# probing dozens of mirrors from an emulator whose own outbound networking
+# may be disabled; all HTTPS traffic is carried over the ADB reverse tunnel.
+mkdir -p "$PREFIX/etc/apt/apt.conf.d"
+cat > "$PREFIX/etc/apt/apt.conf.d/99-ci-proxy" <<'APT_PROXY'
+Acquire::http::Proxy "http://127.0.0.1:3128";
+Acquire::https::Proxy "http://127.0.0.1:3128";
+Acquire::Retries "3";
+Acquire::http::Timeout "45";
+Acquire::https::Timeout "45";
+APT_PROXY
+cat > "$PREFIX/etc/apt/sources.list" <<'TERMUX_MAIN'
+deb https://packages-cf.termux.dev/apt/termux-main stable main
+TERMUX_MAIN
 
 log() { printf '[termux-mate-smoke] %s\n' "$*"; }
 
-log "Updating Termux repositories"
-pkg update -y
+log "Checking the Termux repository through the ADB reverse tunnel"
+curl --fail --silent --show-error --location \
+  --connect-timeout 20 --max-time 90 \
+  https://packages-cf.termux.dev/apt/termux-main/dists/stable/InRelease \
+  --output "$HOME/termux-main-InRelease"
+test -s "$HOME/termux-main-InRelease"
+
+log "Updating Termux package indexes"
+apt-get update
 log "Installing Termux PRoot and utilities"
-pkg install -y proot tar procps
-log "Enabling the official Termux X11 repository"
-pkg install -y x11-repo
-pkg update -y
+apt-get install -y proot tar procps x11-repo
+log "Pinning X11 packages to the official Cloudflare mirror"
+if [ -d "$PREFIX/etc/apt/sources.list.d" ]; then
+  find "$PREFIX/etc/apt/sources.list.d" -type f \
+    \( -name '*.list' -o -name '*.sources' \) -print0 |
+    xargs -0 -r sed -i 's#https://packages\\.termux\\.dev/#https://packages-cf.termux.dev/#g'
+fi
+log "Updating main and X11 package indexes"
+apt-get update
 log "Installing the Termux:X11 companion package"
-pkg install -y termux-x11-nightly
+apt-get install -y termux-x11-nightly
+command -v proot >/dev/null
+command -v termux-x11 >/dev/null
 
 ARCHIVE="$HOME/noble-mateRaw-amd64.tar.gz"
 ROOTFS="$HOME/noble-mate-amd64"
