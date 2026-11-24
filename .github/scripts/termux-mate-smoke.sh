@@ -25,11 +25,14 @@ collect_diagnostics() {
   adb shell run-as com.termux /system/bin/ls -l "$TERMUX_PREFIX/bin/bash" \
     > "$OUT_DIR/termux-bash-file.txt" 2>&1
   : > "$OUT_DIR/termux-runtime-logs.txt"
-  for f in mate-session.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt; do
+  for f in mate-session.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt termux-main-InRelease; do
     echo "===== $f =====" >> "$OUT_DIR/termux-runtime-logs.txt"
     adb shell run-as com.termux /system/bin/cat "$TERMUX_HOME/$f" \
       >> "$OUT_DIR/termux-runtime-logs.txt" 2>&1 || true
   done
+  if [ -n "${proxy_pid:-}" ]; then
+    kill "$proxy_pid" 2>/dev/null || true
+  fi
   exit "$status"
 }
 trap collect_diagnostics EXIT
@@ -207,7 +210,7 @@ log "Pinning X11 packages to the official Cloudflare mirror"
 if [ -d "$PREFIX/etc/apt/sources.list.d" ]; then
   find "$PREFIX/etc/apt/sources.list.d" -type f \
     \( -name '*.list' -o -name '*.sources' \) -print0 |
-    xargs -0 -r sed -i 's#https://packages\\.termux\\.dev/#https://packages-cf.termux.dev/#g'
+    xargs -0 -r sed -i 's#packages\\.termux\\.dev#packages-cf.termux.dev#g'
 fi
 log "Updating main and X11 package indexes"
 apt-get update
@@ -342,5 +345,17 @@ test -s "$OUT_DIR/termux-mate-screen.png" || {
   echo "Android screenshot was not produced"
   exit 22
 }
+
+echo "::group::Verify Termux:X11 is the visible foreground activity"
+adb shell dumpsys window > "$OUT_DIR/android-window-after-launch.txt"
+if ! grep -q "com.termux.x11" "$OUT_DIR/android-window-after-launch.txt"; then
+  echo "Termux:X11 is not the visible foreground activity after MATE launch" >&2
+  grep -E "mCurrentFocus|mFocusedApp" "$OUT_DIR/android-window-after-launch.txt" >&2 || true
+  exit 23
+fi
+adb shell screencap -p /sdcard/termux-mate-screen.png
+adb pull /sdcard/termux-mate-screen.png "$OUT_DIR/termux-mate-screen.png"
+test -s "$OUT_DIR/termux-mate-screen.png"
+echo "::endgroup::"
 
 echo "Termux MATE integration smoke test completed"
