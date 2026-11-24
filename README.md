@@ -4,6 +4,34 @@
 
 An ( fs-cook & debootstrap ) wrapper to build udroid with cmdline.
 
+## Ubuntu Noble MATE X11 image
+
+The `noble/mateRaw` target builds a lightweight Ubuntu 24.04 MATE desktop
+root filesystem for Termux:X11. It supports ARM64 and AMD64 builds and uses
+MATE core packages with Ubuntu MATE defaults, without installing LightDM or
+an in-container Xorg server.
+
+Build an ARM64 image with:
+
+```sh
+sudo bash build.sh -s noble -v mateRaw -a arm64
+```
+
+Use `-a amd64` for the AMD64 target. The archive is written to
+`fs-cook/out/noble-mateRaw-<architecture>.tar.gz`. Start Termux:X11, enter
+the extracted Noble root filesystem, and launch the desktop with:
+
+```sh
+udroid-mate-x11
+```
+
+The launcher checks the X11 connection, starts the system D-Bus only when
+needed, creates a private PRoot-compatible runtime directory, and starts MATE
+with a fresh session D-Bus. The unavailable systemd-logind activation file is
+kept outside the active D-Bus service directory because PRoot does not run
+systemd or logind. The CI matrix opts this target into ARM64 and AMD64 without
+changing the default architectures used by other variants.
+
 ## Ubuntu Plucky GNOME X11 image
 
 The `plucky/gnomeRaw` target builds an ARM64 Ubuntu Plucky GNOME desktop
