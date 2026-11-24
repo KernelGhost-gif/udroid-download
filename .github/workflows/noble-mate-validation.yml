@@ -1,8 +1,6 @@
 name: Noble MATE Build Validation
 
 on:
-  push:
-    branches: [feat/noble-mate-termux-x11-20261124]
   pull_request:
     branches: [main]
     paths:
