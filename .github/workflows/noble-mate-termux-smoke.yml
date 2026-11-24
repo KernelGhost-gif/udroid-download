@@ -129,9 +129,24 @@ jobs:
           test -s "$out/termux-x11.apk"
           sha256sum "$out/termux.apk" "$out/termux-x11.apk"
 
+      - name: Enable KVM for Android emulator
+        run: |
+          set -euo pipefail
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+            echo "KVM is available; Android emulator will use hardware acceleration"
+          else
+            echo "KVM is unavailable; Android emulator will fall back to TCG"
+            echo "ANDROID_I_WANT_MY_TCG=yes" >> "$GITHUB_ENV"
+          fi
+
       - name: Install Termux, start Android, and launch MATE through Termux:X11
-        env:
-          ANDROID_I_WANT_MY_TCG: "yes"
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -139,11 +154,12 @@ jobs:
           arch: x86_64
           profile: pixel_5
           cores: 4
-          ram-size: 6144M
-          heap-size: 1024M
+          ram-size: 4096M
+          heap-size: 512M
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -netfast -gpu swiftshader_indirect -camera-back none
           disable-animations: true
           emulator-boot-timeout: 1200
+          disable-linux-hw-accel: auto
           script: bash .github/scripts/termux-mate-smoke.sh
 
       - name: Upload Termux, X11, MATE logs and emulator screenshot
