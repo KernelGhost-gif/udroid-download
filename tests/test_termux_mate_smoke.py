@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import sys
 import unittest
 
 
@@ -63,6 +64,27 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
 
     def test_requires_the_mate_window_manager_for_success(self):
         self.assertIn('if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ]; then', self.content)
+
+
+    def test_uses_adb_reverse_https_tunnel_and_official_cdn_sources(self):
+        self.assertIn("adb reverse tcp:3128 tcp:3128", self.content)
+        self.assertIn('Acquire::https::Proxy "http://127.0.0.1:3128";', self.content)
+        self.assertIn("packages-cf.termux.dev/apt/termux-main", self.content)
+        self.assertIn("apt-get install -y termux-x11-nightly", self.content)
+
+    def test_captures_screenshot_before_asserting_it_exists(self):
+        capture = self.content.index('adb shell screencap -p /sdcard/termux-mate-screen.png', self.content.index('Run MATE inside Termux PRoot and X11'))
+        assertion = self.content.index('test -s "$OUT_DIR/termux-mate-screen.png"', capture)
+        self.assertLess(capture, assertion)
+
+    def test_proxy_server_compiles(self):
+        proxy = ROOT / ".github/scripts/termux-ci-connect-proxy.py"
+        result = subprocess.run(
+            [sys.executable, "-m", "py_compile", str(proxy)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_installs_both_termux_packages(self):
         self.assertIn('install_apk_without_streaming "$TERMUX_APK" /data/local/tmp/termux.apk com.termux', self.content)
