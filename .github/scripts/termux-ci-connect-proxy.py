@@ -12,7 +12,6 @@ import select
 import socket
 import socketserver
 import sys
-from urllib.parse import urlsplit
 
 
 def open_upstream(authority: str) -> socket.socket:
