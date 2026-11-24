@@ -9,6 +9,7 @@ SUITES_DIR="./suites"
 # set it to "all" to build all architectures defined in the <suite>/<varient>.sh file
 # "all" is currently broken!
 ARCHITECTURES = ["arm64", "armhf"]
+SUPPORTED_ARCHITECTURES = ["amd64", "arm64", "armhf"]
 
 
 def variant_architectures(variant_path: str) -> list[str]:
@@ -25,7 +26,7 @@ def variant_architectures(variant_path: str) -> list[str]:
 			if word.strip()
 		]
 
-	unsupported = sorted(set(architectures) - set(ARCHITECTURES))
+	unsupported = sorted(set(architectures) - set(SUPPORTED_ARCHITECTURES))
 	if unsupported:
 		raise ValueError(
 			f"Unsupported architecture in {manifest}: {', '.join(unsupported)}"
