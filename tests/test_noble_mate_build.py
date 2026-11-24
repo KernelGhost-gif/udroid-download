@@ -143,6 +143,7 @@ do_unmount() { :; }
     def test_setup_is_lightweight_and_uses_noble_mate_packages(self):
         setup = (VARIANT / "mateRaw-setup.sh").read_text()
         self.assertIn("mate-desktop-environment-core", setup)
+        self.assertIn("mate-indicator-applet", setup)
         self.assertIn("ubuntu-mate-default-settings", setup)
         self.assertIn("ubuntu-mate-icon-themes", setup)
         self.assertIn("gvfs-backends", setup)
