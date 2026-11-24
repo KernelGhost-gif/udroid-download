@@ -185,9 +185,9 @@ mkdir -p "$PREFIX/etc/apt/apt.conf.d"
 cat > "$PREFIX/etc/apt/apt.conf.d/99-ci-proxy" <<'APT_PROXY'
 Acquire::http::Proxy "http://127.0.0.1:3128";
 Acquire::https::Proxy "http://127.0.0.1:3128";
-Acquire::Retries "3";
-Acquire::http::Timeout "45";
-Acquire::https::Timeout "45";
+Acquire::Retries "1";
+Acquire::http::Timeout "20";
+Acquire::https::Timeout "20";
 APT_PROXY
 cat > "$PREFIX/etc/apt/sources.list" <<'TERMUX_MAIN'
 deb https://packages-cf.termux.dev/apt/termux-main stable main
@@ -195,27 +195,38 @@ TERMUX_MAIN
 
 log() { printf '[termux-mate-smoke] %s\n' "$*"; }
 
-log "Checking the Termux repository through the ADB reverse tunnel"
-curl --fail --silent --show-error --location \
-  --connect-timeout 20 --max-time 90 \
-  https://packages-cf.termux.dev/apt/termux-main/dists/stable/InRelease \
-  --output "$HOME/termux-main-InRelease"
+run_phase() {
+  local label="$1"
+  local seconds="$2"
+  shift 2
+  log "BEGIN: $label (hard limit ${seconds}s)"
+  if timeout --foreground --signal=TERM --kill-after=15s "${seconds}s" "$@"; then
+    log "PASS: $label"
+  else
+    local status=$?
+    log "FAIL: $label (exit $status)"
+    return "$status"
+  fi
+}
+
+run_phase "Termux main repository connectivity" 120 \
+  curl --fail --silent --show-error --location \
+    --connect-timeout 15 --max-time 90 \
+    https://packages-cf.termux.dev/apt/termux-main/dists/stable/InRelease \
+    --output "$HOME/termux-main-InRelease"
 test -s "$HOME/termux-main-InRelease"
 
-log "Updating Termux package indexes"
-apt-get update
-log "Installing Termux PRoot and utilities"
-apt-get install -y proot tar procps x11-repo
+run_phase "Update Termux main indexes" 240 apt-get update
+run_phase "Install PRoot utilities and X11 repository" 600 \
+  apt-get install -y proot tar procps x11-repo
 log "Pinning X11 packages to the official Cloudflare mirror"
 if [ -d "$PREFIX/etc/apt/sources.list.d" ]; then
   find "$PREFIX/etc/apt/sources.list.d" -type f \
     \( -name '*.list' -o -name '*.sources' \) -print0 |
     xargs -0 -r sed -i 's#packages[.]termux[.]dev#packages-cf.termux.dev#g'
 fi
-log "Updating main and X11 package indexes"
-apt-get update
-log "Installing the Termux:X11 companion package"
-apt-get install -y termux-x11-nightly
+run_phase "Update main and X11 package indexes" 240 apt-get update
+run_phase "Install Termux:X11 package" 600 apt-get install -y termux-x11-nightly
 command -v proot >/dev/null
 command -v termux-x11 >/dev/null
 
@@ -224,8 +235,7 @@ ROOTFS="$HOME/noble-mate-amd64"
 test -s "$ARCHIVE"
 rm -rf "$ROOTFS"
 mkdir -p "$ROOTFS"
-log "Extracting the built Noble MATE rootfs"
-tar -xzf "$ARCHIVE" -C "$ROOTFS"
+run_phase "Extract Noble MATE rootfs" 900 tar -xzf "$ARCHIVE" -C "$ROOTFS"
 test -x "$ROOTFS/usr/bin/mate-session"
 test -x "$ROOTFS/usr/bin/mate-panel"
 test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
@@ -235,17 +245,25 @@ TERMUX_X11_DEBUG=1 nohup termux-x11 :0 \
   > "$HOME/termux-x11.log" 2>&1 < /dev/null &
 echo "$!" > "$HOME/termux-x11.pid"
 sleep 4
-am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity \
-  > "$HOME/termux-x11-activity.log" 2>&1
-sleep 3
-
-log "Checking the Termux:X11 socket"
-if [ ! -S "$TMPDIR/.X11-unix/X0" ]; then
+run_phase "Open Termux:X11 activity" 30 \
+  am start --user 0 -n com.termux.x11/com.termux.x11.MainActivity \
+    > "$HOME/termux-x11-activity.log" 2>&1
+log "Waiting up to 45 seconds for the Termux:X11 socket"
+socket_ready=false
+for attempt in $(seq 1 45); do
+  if [ -S "$TMPDIR/.X11-unix/X0" ]; then
+    socket_ready=true
+    break
+  fi
+  sleep 1
+done
+if [ "$socket_ready" != true ]; then
   find "$TMPDIR" -maxdepth 4 -type s -print > "$HOME/x11-sockets.txt" || true
   log "The expected X11 socket was not created at $TMPDIR/.X11-unix/X0"
   cat "$HOME/termux-x11.log" >&2 || true
   exit 20
 fi
+log "PASS: Termux:X11 socket is ready"
 
 log "Launching MATE inside the Noble rootfs using Termux's own proot"
 # termux-exec rewrites absolute executable paths for Android. That behavior
