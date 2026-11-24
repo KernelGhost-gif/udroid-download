@@ -120,6 +120,15 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn("/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin", self.content)
         self.assertIn("install ok installed", self.content)
 
+    def test_emulator_enables_kvm_and_only_uses_tcg_as_fallback(self):
+        workflow = (ROOT / ".github/workflows/noble-mate-termux-smoke.yml").read_text()
+        self.assertIn("name: Enable KVM for Android emulator", workflow)
+        self.assertIn("sudo udevadm trigger --name-match=kvm", workflow)
+        self.assertIn('echo "ANDROID_I_WANT_MY_TCG=yes" >> "$GITHUB_ENV"', workflow)
+        self.assertIn("disable-linux-hw-accel: auto", workflow)
+        self.assertNotIn('ANDROID_I_WANT_MY_TCG: "yes"', workflow)
+        self.assertIn("ram-size: 4096M", workflow)
+
     def test_emulator_smoke_rejects_android_anr_dialogs(self):
         self.assertIn("Application Not Responding:", self.content)
         self.assertIn("android-window-before-recovery.txt", self.content)
