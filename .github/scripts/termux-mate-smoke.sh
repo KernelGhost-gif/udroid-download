@@ -326,6 +326,18 @@ if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ];
 fi
 
 sleep 8
+# Check the applet factory shipped by the image is part of the installed
+# package set. Ubuntu MATE default settings reference this factory.
+run_phase "Verify the configured MATE indicator applet package" 30 \
+  "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
+    /usr/bin/dpkg-query -W -f='\u0004{Status}\n' mate-indicator-applet
+if ! "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
+    /usr/bin/dpkg-query -W -f='\u0004{Status}\n' mate-indicator-applet | \
+    grep -Fq 'install ok installed'; then
+  log "The MATE indicator applet package is not installed in the Noble rootfs"
+  exit 24
+fi
+
 log "Termux/PRoot MATE smoke test passed"
 GUEST
 
@@ -367,13 +379,29 @@ if [ "$guest_status" -ne 0 ]; then
   exit "$guest_status"
 fi
 
-echo "::group::Verify Termux:X11 is the visible foreground activity"
+echo "::group::Recover and verify Android foreground state"
+# A constrained software-rendered emulator can briefly stall System UI while
+# MATE starts. Give the UI one recovery window, then fail if its ANR dialog
+# remains; a process-only pass is not sufficient desktop validation.
+adb shell dumpsys window > "$OUT_DIR/android-window-before-recovery.txt"
+if grep -q "Application Not Responding: com.android.systemui" "$OUT_DIR/android-window-before-recovery.txt"; then
+  adb shell input tap 280 1010 || true
+  sleep 15
+fi
 adb shell dumpsys window > "$OUT_DIR/android-window-after-launch.txt"
+if grep -q "Application Not Responding:" "$OUT_DIR/android-window-after-launch.txt"; then
+  echo "Android still has an Application Not Responding dialog after the recovery window" >&2
+  grep -E "Application Not Responding|mCurrentFocus|mFocusedApp" \
+    "$OUT_DIR/android-window-after-launch.txt" >&2 || true
+  exit 25
+fi
 if ! grep -q "com.termux.x11" "$OUT_DIR/android-window-after-launch.txt"; then
   echo "Termux:X11 is not the visible foreground activity after MATE launch" >&2
   grep -E "mCurrentFocus|mFocusedApp" "$OUT_DIR/android-window-after-launch.txt" >&2 || true
   exit 23
 fi
+echo "::endgroup::"
+
 adb shell screencap -p /sdcard/termux-mate-screen.png
 adb pull /sdcard/termux-mate-screen.png "$OUT_DIR/termux-mate-screen.png"
 test -s "$OUT_DIR/termux-mate-screen.png"
