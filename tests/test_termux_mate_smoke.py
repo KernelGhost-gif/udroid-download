@@ -135,8 +135,8 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn("mate-applet-brisk-menu", setup)
         self.assertIn("org.mate.panel.applet.IndicatorAppletCompleteFactory.service", self.content)
         self.assertIn("org.mate.panel.applet.BriskMenuFactory.service", self.content)
-        self.assertIn("Successfully activated service 'org.mate.panel.applet.IndicatorAppletCompleteFactory'", self.content)
-        self.assertIn("Successfully activated service 'org.mate.panel.applet.BriskMenuFactory'", self.content)
+        self.assertIn("Successfully activated service 'org.mate.panel.applet.$factory'", self.content)
+        self.assertIn("for factory in IndicatorAppletCompleteFactory BriskMenuFactory", self.content)
 
     def test_emulator_smoke_rejects_android_anr_dialogs(self):
         self.assertIn("Application Not Responding:", self.content)
