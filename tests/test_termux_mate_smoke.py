@@ -76,6 +76,7 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         capture = self.content.index('adb shell screencap -p /sdcard/termux-mate-screen.png', self.content.index('Run MATE inside Termux PRoot and X11'))
         assertion = self.content.index('test -s "$OUT_DIR/termux-mate-screen.png"', capture)
         self.assertLess(capture, assertion)
+        self.assertNotIn('Android screenshot was not produced', self.content)
 
     def test_proxy_server_compiles(self):
         proxy = ROOT / ".github/scripts/termux-ci-connect-proxy.py"
