@@ -116,6 +116,7 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
     def test_build_and_smoke_require_the_indicator_panel_applet(self):
         setup = (ROOT / "suites/noble/mateRaw/mateRaw-setup.sh").read_text()
         self.assertIn("mate-indicator-applet", setup)
+        self.assertIn("mate-applet-brisk-menu", setup)
         self.assertIn("dpkg-query", self.content)
         self.assertIn("/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin", self.content)
         self.assertIn("install ok installed", self.content)
@@ -128,6 +129,14 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn("disable-linux-hw-accel: auto", workflow)
         self.assertNotIn('ANDROID_I_WANT_MY_TCG: "yes"', workflow)
         self.assertIn("ram-size: 4096M", workflow)
+
+    def test_panel_applet_factories_are_installed_and_activated(self):
+        setup = (ROOT / "suites/noble/mateRaw/mateRaw-setup.sh").read_text()
+        self.assertIn("mate-applet-brisk-menu", setup)
+        self.assertIn("org.mate.panel.applet.IndicatorAppletCompleteFactory.service", self.content)
+        self.assertIn("org.mate.panel.applet.BriskMenuFactory.service", self.content)
+        self.assertIn("Successfully activated service 'org.mate.panel.applet.IndicatorAppletCompleteFactory'", self.content)
+        self.assertIn("Successfully activated service 'org.mate.panel.applet.BriskMenuFactory'", self.content)
 
     def test_emulator_smoke_rejects_android_anr_dialogs(self):
         self.assertIn("Application Not Responding:", self.content)
