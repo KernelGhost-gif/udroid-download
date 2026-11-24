@@ -88,6 +88,20 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_guest_stages_have_hard_timeouts_and_named_progress(self):
+        for label in (
+            "Termux main repository connectivity",
+            "Update Termux main indexes",
+            "Install PRoot utilities and X11 repository",
+            "Update main and X11 package indexes",
+            "Install Termux:X11 package",
+            "Extract Noble MATE rootfs",
+        ):
+            self.assertIn(label, self.content)
+        self.assertIn('timeout --foreground --signal=TERM --kill-after=15s "${seconds}s" "$@"', self.content)
+        self.assertIn('Acquire::Retries "1";', self.content)
+        self.assertIn('Acquire::https::Timeout "20";', self.content)
+
     def test_installs_both_termux_packages(self):
         self.assertIn('install_apk_without_streaming "$TERMUX_APK" /data/local/tmp/termux.apk com.termux', self.content)
         self.assertIn('install_apk_without_streaming "$X11_APK" /data/local/tmp/termux-x11.apk com.termux.x11', self.content)
