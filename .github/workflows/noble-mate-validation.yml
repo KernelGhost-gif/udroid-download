@@ -16,6 +16,10 @@ on:
       - "tests/test_termux_mate_smoke.py"
   workflow_dispatch:
 
+concurrency:
+  group: noble-mate-validation-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
