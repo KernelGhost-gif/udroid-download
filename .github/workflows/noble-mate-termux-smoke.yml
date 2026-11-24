@@ -72,6 +72,7 @@ jobs:
             usr/bin/mate-panel \
             usr/bin/marco \
             usr/local/bin/udroid-mate-x11 \
+            usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service \
             usr/share/X11/xkb
           do
             grep -Eq "(^|/)$path(/|$)" "$RUNNER_TEMP/noble-mate-amd64-files.txt"
