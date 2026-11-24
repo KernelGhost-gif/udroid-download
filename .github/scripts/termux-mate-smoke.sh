@@ -242,6 +242,11 @@ run_phase "Extract Noble MATE rootfs" 600 tar -xzf "$ARCHIVE" -C "$ROOTFS"
 test -x "$ROOTFS/usr/bin/mate-session"
 test -x "$ROOTFS/usr/bin/mate-panel"
 test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
+
+# termux-exec rewrites absolute executable paths for Android; that behavior
+# breaks guest executable lookup in PRoot. Clear it before every guest PRoot
+# command, including the package metadata check below.
+unset LD_PRELOAD
 test -f "$ROOTFS/usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service" || {
   log "The configured IndicatorAppletCompleteFactory D-Bus service is missing"
   exit 26
@@ -273,11 +278,8 @@ fi
 log "PASS: Termux:X11 socket is ready"
 
 log "Launching MATE inside the Noble rootfs using Termux's own proot"
-# termux-exec rewrites absolute executable paths for Android. That behavior
-# is invalid inside PRoot and makes /usr/bin/env resolve to a Termux path.
-# Keep Termux's LD_LIBRARY_PATH for the host proot binary, but remove the
-# preload before PRoot starts so guest executable paths stay guest-relative.
-unset LD_PRELOAD
+# Keep Termux's LD_LIBRARY_PATH for the host proot binary, but do not
+# re-enable termux-exec while guest executables are starting.
 nohup "$PREFIX/bin/proot" \
   --link2symlink \
   --sysvipc \
