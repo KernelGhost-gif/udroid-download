@@ -22,6 +22,7 @@ apt-get install -y --no-install-recommends \
     libgl1-mesa-dri \
     locales \
     mate-applets \
+    mate-indicator-applet \
     mate-desktop-environment-core \
     mate-utils \
     mesa-utils \
