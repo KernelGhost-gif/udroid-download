@@ -343,10 +343,10 @@ for package in mate-indicator-applet mate-applet-brisk-menu; do
   run_phase "Verify configured MATE panel package: $package" 30 \
     "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
       /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-      /usr/bin/dpkg-query -W -f='\u0024{Status}\\n' "$package"
+      /usr/bin/dpkg-query -W -f='${Status}\n' "$package"
   if ! "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
       /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-      /usr/bin/dpkg-query -W -f='\u0024{Status}\\n' "$package" | \
+      /usr/bin/dpkg-query -W -f='${Status}\n' "$package" | \
       grep -Fq 'install ok installed'; then
     log "Required MATE panel package is not installed: $package"
     exit 24
