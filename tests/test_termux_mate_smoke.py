@@ -113,6 +113,17 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn('run_phase "Install Termux:X11 package" 480', self.content)
         self.assertIn('run_phase "Extract Noble MATE rootfs" 600', self.content)
         self.assertIn('timeout --foreground --signal=TERM --kill-after=30s 42m', self.content)
+    def test_build_and_smoke_require_the_indicator_panel_applet(self):
+        setup = (ROOT / "suites/noble/mateRaw/mateRaw-setup.sh").read_text()
+        self.assertIn("mate-indicator-applet", setup)
+        self.assertIn("dpkg-query", self.content)
+        self.assertIn("install ok installed", self.content)
+
+    def test_emulator_smoke_rejects_android_anr_dialogs(self):
+        self.assertIn("Application Not Responding:", self.content)
+        self.assertIn("android-window-before-recovery.txt", self.content)
+        self.assertIn("android-window-after-launch.txt", self.content)
+
     def test_installs_both_termux_packages(self):
         self.assertIn('install_apk_without_streaming "$TERMUX_APK" /data/local/tmp/termux.apk com.termux', self.content)
         self.assertIn('install_apk_without_streaming "$X11_APK" /data/local/tmp/termux-x11.apk com.termux.x11', self.content)
