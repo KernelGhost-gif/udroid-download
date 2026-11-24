@@ -247,10 +247,16 @@ test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
 # breaks guest executable lookup in PRoot. Clear it before every guest PRoot
 # command, including the package metadata check below.
 unset LD_PRELOAD
-test -f "$ROOTFS/usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service" || {
-  log "The configured IndicatorAppletCompleteFactory D-Bus service is missing"
-  exit 26
-}
+for service in \
+  org.mate.panel.applet.IndicatorAppletCompleteFactory.service \
+  org.mate.panel.applet.BriskMenuFactory.service
+do
+  test -f "$ROOTFS/usr/share/dbus-1/services/$service" || {
+    log "Required MATE panel D-Bus factory is missing: $service"
+    exit 26
+  }
+done
+
 
 log "Starting the real Termux:X11 server on display :0"
 TERMUX_X11_DEBUG=1 nohup termux-x11 :0 \
@@ -332,19 +338,30 @@ if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ];
 fi
 
 sleep 8
-# Check the applet factory shipped by the image is part of the installed
-# package set. Ubuntu MATE default settings reference this factory.
-run_phase "Verify the configured MATE indicator applet package" 30 \
-  "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
-    /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-    /usr/bin/dpkg-query -W -f='${Status}\n' mate-indicator-applet
-if ! "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
-    /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-    /usr/bin/dpkg-query -W -f='${Status}\n' mate-indicator-applet | \
-    grep -Fq 'install ok installed'; then
-  log "The MATE indicator applet package is not installed in the Noble rootfs"
-  exit 24
-fi
+# Verify each configured panel applet package is installed.
+for package in mate-indicator-applet mate-applet-brisk-menu; do
+  run_phase "Verify configured MATE panel package: $package" 30 \
+    "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
+      /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+      /usr/bin/dpkg-query -W -f='\u0024{Status}\\n' "$package"
+  if ! "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
+      /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+      /usr/bin/dpkg-query -W -f='\u0024{Status}\\n' "$package" | \
+      grep -Fq 'install ok installed'; then
+    log "Required MATE panel package is not installed: $package"
+    exit 24
+  fi
+done
+
+# Verify the panel activated both configured applet factories; the desktop
+# process check alone would miss a panel dialog caused by a missing factory.
+for factory in IndicatorAppletCompleteFactory BriskMenuFactory; do
+  if ! grep -Fq "Successfully activated service 'org.mate.panel.applet.$factory'" "$HOME/mate-session.log"; then
+    log "MATE panel did not successfully activate $factory"
+    grep -E "org.mate.panel.applet.$factory|BriskMenu|IndicatorApplet" "$HOME/mate-session.log" >&2 || true
+    exit 28
+  fi
+done
 
 log "Termux/PRoot MATE smoke test passed"
 GUEST
