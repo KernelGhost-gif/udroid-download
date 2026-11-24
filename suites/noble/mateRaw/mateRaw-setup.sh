@@ -23,6 +23,7 @@ apt-get install -y --no-install-recommends \
     locales \
     mate-applets \
     mate-indicator-applet \
+    mate-applet-brisk-menu \
     mate-desktop-environment-core \
     mate-utils \
     mesa-utils \
@@ -54,6 +55,16 @@ cat > /etc/dconf/profile/user <<'EOF_DCONF'
 user-db:user
 system-db:local
 EOF_DCONF
+
+# Keep MATE's session requirements valid for a PRoot desktop without a dock
+# service, and select Marco explicitly rather than relying on session defaults.
+cat > /etc/dconf/db/local.d/00-udroid-mate-session <<'EOF_SESSION_DCONF'
+[org/mate/desktop/session]
+required-components-list=['windowmanager', 'panel', 'filemanager']
+
+[org/mate/desktop/session/required-components]
+windowmanager='marco'
+EOF_SESSION_DCONF
 
 if command -v dconf >/dev/null 2>&1; then
     dconf update
