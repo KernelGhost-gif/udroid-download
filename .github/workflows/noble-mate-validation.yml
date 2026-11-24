@@ -75,7 +75,7 @@ jobs:
             usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service \
             usr/share/X11/xkb
           do
-            grep -Eq "(^|/)$(printf '%s' "$path" | sed 's/[.[\*^$()+?{|]/\\&/g')$" "$listing" || {
+            grep -Fq "$path" "$listing" || {
               echo "Missing required rootfs path: $path" >&2
               exit 1
             }
