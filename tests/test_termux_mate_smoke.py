@@ -44,8 +44,8 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
 
     def test_retries_when_android_package_manager_is_not_ready(self):
         self.assertIn("wait_for_package_manager()", self.content)
-        self.assertIn("for attempt in $(seq 1 45)", self.content)
-        self.assertIn("for attempt in $(seq 1 4)", self.content)
+        self.assertIn("for attempt in $(seq 1 30)", self.content)
+        self.assertIn("for attempt in $(seq 1 2)", self.content)
 
     def test_captures_android_diagnostics_even_on_early_failure(self):
         self.assertIn("trap collect_diagnostics EXIT", self.content)
@@ -89,7 +89,9 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_android_package_install_and_first_launch_are_bounded(self):
-        self.assertIn('timeout --foreground --signal=TERM --kill-after=15s 180s \\', self.content)
+        self.assertIn('timeout --foreground --signal=TERM --kill-after=10s 120s \\', self.content)
+        self.assertIn('timeout --foreground --signal=TERM --kill-after=3s 3s \\', self.content)
+        self.assertIn('timeout --foreground --signal=TERM --kill-after=10s 60s adb push "$apk" "$remote_path"', self.content)
         self.assertIn('timeout --foreground --signal=TERM --kill-after=10s 30s adb shell monkey -p com.termux 1', self.content)
         self.assertIn('timeout --foreground --signal=TERM --kill-after=5s 10s \\', self.content)
 
