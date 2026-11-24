@@ -49,7 +49,8 @@ echo "::endgroup::"
 
 wait_for_package_manager() {
   for attempt in $(seq 1 45); do
-    if adb shell pm list packages >/dev/null 2>&1; then
+    if timeout --foreground --signal=TERM --kill-after=5s 10s \
+        adb shell pm list packages >/dev/null 2>&1; then
       return 0
     fi
     sleep 2
@@ -67,13 +68,15 @@ install_apk_without_streaming() {
   adb push "$apk" "$remote_path"
 
   for attempt in $(seq 1 4); do
-    if adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
+    if timeout --foreground --signal=TERM --kill-after=5s 15s \
+        adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
       echo "$package_name is already installed"
       return 0
     fi
 
     echo "Installing $package_name with local pm install (attempt $attempt/4)"
-    if adb shell pm install -r "$remote_path"; then
+    if timeout --foreground --signal=TERM --kill-after=15s 180s \
+        adb shell pm install -r "$remote_path"; then
       if adb shell pm path "$package_name" 2>/dev/null | grep -q '^package:'; then
         echo "$package_name installed successfully"
         return 0
@@ -135,7 +138,7 @@ adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
 adb shell input keyevent 82 || true
-adb shell monkey -p com.termux 1
+timeout --foreground --signal=TERM --kill-after=10s 30s adb shell monkey -p com.termux 1
 echo "Waiting for Termux's second-stage bootstrap completion marker..."
 ready=false
 for attempt in $(seq 1 100); do
