@@ -336,8 +336,10 @@ sleep 8
 # package set. Ubuntu MATE default settings reference this factory.
 run_phase "Verify the configured MATE indicator applet package" 30 \
   "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
+    /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
     /usr/bin/dpkg-query -W -f='${Status}\n' mate-indicator-applet
 if ! "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
+    /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
     /usr/bin/dpkg-query -W -f='${Status}\n' mate-indicator-applet | \
     grep -Fq 'install ok installed'; then
   log "The MATE indicator applet package is not installed in the Noble rootfs"
