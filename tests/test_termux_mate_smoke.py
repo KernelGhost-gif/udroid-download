@@ -73,7 +73,7 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn("apt-get install -y termux-x11-nightly", self.content)
 
     def test_captures_screenshot_before_asserting_it_exists(self):
-        verification = self.content.index('::group::Verify Termux:X11 is the visible foreground activity')
+        verification = self.content.index('::group::Recover and verify Android foreground state')
         capture = self.content.index('adb shell screencap -p /sdcard/termux-mate-screen.png', verification)
         assertion = self.content.index('test -s "$OUT_DIR/termux-mate-screen.png"', capture)
         self.assertLess(capture, assertion)
