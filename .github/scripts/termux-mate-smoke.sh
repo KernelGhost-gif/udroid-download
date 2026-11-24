@@ -242,6 +242,10 @@ run_phase "Extract Noble MATE rootfs" 600 tar -xzf "$ARCHIVE" -C "$ROOTFS"
 test -x "$ROOTFS/usr/bin/mate-session"
 test -x "$ROOTFS/usr/bin/mate-panel"
 test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
+test -f "$ROOTFS/usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service" || {
+  log "The configured IndicatorAppletCompleteFactory D-Bus service is missing"
+  exit 26
+}
 
 log "Starting the real Termux:X11 server on display :0"
 TERMUX_X11_DEBUG=1 nohup termux-x11 :0 \
