@@ -88,6 +88,11 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_android_package_install_and_first_launch_are_bounded(self):
+        self.assertIn('timeout --foreground --signal=TERM --kill-after=15s 180s \\', self.content)
+        self.assertIn('timeout --foreground --signal=TERM --kill-after=10s 30s adb shell monkey -p com.termux 1', self.content)
+        self.assertIn('timeout --foreground --signal=TERM --kill-after=5s 10s \\', self.content)
+
     def test_guest_stages_have_hard_timeouts_and_named_progress(self):
         for label in (
             "Termux main repository connectivity",
