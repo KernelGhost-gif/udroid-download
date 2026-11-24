@@ -164,9 +164,12 @@ do_unmount() { :; }
 
     def test_default_mate_session_uses_marco_without_a_dock_component(self):
         setup = (VARIANT / "mateRaw-setup.sh").read_text()
-        self.assertIn("[org/mate/desktop/session/required-components]", setup)
+        self.assertIn("[org/mate/session]", setup)
+        self.assertIn("[org/mate/session/required-components]", setup)
         self.assertIn("windowmanager='marco'", setup)
+        self.assertIn("dock=''", setup)
         self.assertIn("required-components-list=['windowmanager', 'panel', 'filemanager']", setup)
+        self.assertNotIn("[org/mate/desktop/session]", setup)
 
     def test_launcher_runs_mate_after_starting_the_system_bus(self):
         with tempfile.TemporaryDirectory() as directory:
