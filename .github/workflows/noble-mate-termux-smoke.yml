@@ -91,7 +91,7 @@ jobs:
     name: Run MATE in Termux PRoot and Termux:X11
     needs: build-noble-mate-amd64
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - name: Checkout smoke-test scripts
         uses: actions/checkout@v4
