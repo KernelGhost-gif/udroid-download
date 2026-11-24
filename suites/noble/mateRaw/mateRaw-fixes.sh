@@ -45,6 +45,8 @@ export DESKTOP_SESSION=mate
 export GDK_BACKEND=x11
 export XKB_CONFIG_ROOT=/usr/share/X11/xkb
 export GSK_RENDERER="${GSK_RENDERER:-cairo}"
+# MATE's mate-wm helper uses this variable to choose the actual window manager.
+export WINDOW_MANAGER=/usr/bin/marco
 
 # Android PRoot has no logind-managed /run/user/<uid>. Use a private,
 # writable runtime directory instead.
