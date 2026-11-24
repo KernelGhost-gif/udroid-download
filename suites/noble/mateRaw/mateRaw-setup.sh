@@ -59,11 +59,12 @@ EOF_DCONF
 # Keep MATE's session requirements valid for a PRoot desktop without a dock
 # service, and select Marco explicitly rather than relying on session defaults.
 cat > /etc/dconf/db/local.d/00-udroid-mate-session <<'EOF_SESSION_DCONF'
-[org/mate/desktop/session]
+[org/mate/session]
 required-components-list=['windowmanager', 'panel', 'filemanager']
 
-[org/mate/desktop/session/required-components]
+[org/mate/session/required-components]
 windowmanager='marco'
+dock=''
 EOF_SESSION_DCONF
 
 if command -v dconf >/dev/null 2>&1; then
