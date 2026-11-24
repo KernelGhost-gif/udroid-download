@@ -209,15 +209,15 @@ run_phase() {
   fi
 }
 
-run_phase "Termux main repository connectivity" 120 \
+run_phase "Termux main repository connectivity" 90 \
   curl --fail --silent --show-error --location \
     --connect-timeout 15 --max-time 90 \
     https://packages-cf.termux.dev/apt/termux-main/dists/stable/InRelease \
     --output "$HOME/termux-main-InRelease"
 test -s "$HOME/termux-main-InRelease"
 
-run_phase "Update Termux main indexes" 240 apt-get update
-run_phase "Install PRoot utilities and X11 repository" 600 \
+run_phase "Update Termux main indexes" 180 apt-get update
+run_phase "Install PRoot utilities and X11 repository" 360 \
   apt-get install -y proot tar procps x11-repo
 log "Pinning X11 packages to the official Cloudflare mirror"
 if [ -d "$PREFIX/etc/apt/sources.list.d" ]; then
@@ -225,8 +225,8 @@ if [ -d "$PREFIX/etc/apt/sources.list.d" ]; then
     \( -name '*.list' -o -name '*.sources' \) -print0 |
     xargs -0 -r sed -i 's#packages[.]termux[.]dev#packages-cf.termux.dev#g'
 fi
-run_phase "Update main and X11 package indexes" 240 apt-get update
-run_phase "Install Termux:X11 package" 600 apt-get install -y termux-x11-nightly
+run_phase "Update main and X11 package indexes" 180 apt-get update
+run_phase "Install Termux:X11 package" 480 apt-get install -y termux-x11-nightly
 command -v proot >/dev/null
 command -v termux-x11 >/dev/null
 
@@ -235,7 +235,7 @@ ROOTFS="$HOME/noble-mate-amd64"
 test -s "$ARCHIVE"
 rm -rf "$ROOTFS"
 mkdir -p "$ROOTFS"
-run_phase "Extract Noble MATE rootfs" 900 tar -xzf "$ARCHIVE" -C "$ROOTFS"
+run_phase "Extract Noble MATE rootfs" 600 tar -xzf "$ARCHIVE" -C "$ROOTFS"
 test -x "$ROOTFS/usr/bin/mate-session"
 test -x "$ROOTFS/usr/bin/mate-panel"
 test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
@@ -328,19 +328,24 @@ GUEST
 
 echo "::group::Copy rootfs and test script into Termux app storage"
 adb shell chmod 755 /data/local/tmp
-adb push "$ROOTFS_ARCHIVE" /data/local/tmp/noble-mateRaw-amd64.tar.gz
-adb push "$OUT_DIR/termux-guest-smoke.sh" /data/local/tmp/termux-guest-smoke.sh
+timeout --foreground --signal=TERM --kill-after=15s 600s \
+  adb push "$ROOTFS_ARCHIVE" /data/local/tmp/noble-mateRaw-amd64.tar.gz
+timeout --foreground --signal=TERM --kill-after=15s 60s \
+  adb push "$OUT_DIR/termux-guest-smoke.sh" /data/local/tmp/termux-guest-smoke.sh
 adb shell chmod 644 /data/local/tmp/noble-mateRaw-amd64.tar.gz
 adb shell chmod 644 /data/local/tmp/termux-guest-smoke.sh
-adb shell run-as com.termux /system/bin/cp \
-  /data/local/tmp/noble-mateRaw-amd64.tar.gz "$TERMUX_HOME/noble-mateRaw-amd64.tar.gz"
-adb shell run-as com.termux /system/bin/cp \
-  /data/local/tmp/termux-guest-smoke.sh "$TERMUX_HOME/termux-guest-smoke.sh"
+timeout --foreground --signal=TERM --kill-after=15s 600s \
+  adb shell run-as com.termux /system/bin/cp \
+    /data/local/tmp/noble-mateRaw-amd64.tar.gz "$TERMUX_HOME/noble-mateRaw-amd64.tar.gz"
+timeout --foreground --signal=TERM --kill-after=15s 60s \
+  adb shell run-as com.termux /system/bin/cp \
+    /data/local/tmp/termux-guest-smoke.sh "$TERMUX_HOME/termux-guest-smoke.sh"
 echo "::endgroup::"
 
 echo "::group::Run MATE inside real Termux PRoot and X11"
 set +e
-adb shell run-as com.termux /system/bin/env \
+timeout --foreground --signal=TERM --kill-after=30s 42m \
+  adb shell run-as com.termux /system/bin/env \
   "HOME=$TERMUX_HOME" \
   "PREFIX=$TERMUX_PREFIX" \
   "TMPDIR=$TERMUX_PREFIX/tmp" \
