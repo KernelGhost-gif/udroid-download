@@ -144,6 +144,7 @@ do_unmount() { :; }
         setup = (VARIANT / "mateRaw-setup.sh").read_text()
         self.assertIn("mate-desktop-environment-core", setup)
         self.assertIn("mate-indicator-applet", setup)
+        self.assertIn("mate-applet-brisk-menu", setup)
         self.assertIn("ubuntu-mate-default-settings", setup)
         self.assertIn("ubuntu-mate-icon-themes", setup)
         self.assertIn("gvfs-backends", setup)
@@ -159,6 +160,13 @@ do_unmount() { :; }
         self.assertIn("dbus-run-session -- mate-session", fixes)
         self.assertIn("UDROID_MATE_RUNTIME_DIR", fixes)
         self.assertEqual(fixes.count("XKB_CONFIG_ROOT=/usr/share/X11/xkb"), 2)
+        self.assertIn("WINDOW_MANAGER=/usr/bin/marco", fixes)
+
+    def test_default_mate_session_uses_marco_without_a_dock_component(self):
+        setup = (VARIANT / "mateRaw-setup.sh").read_text()
+        self.assertIn("[org/mate/desktop/session/required-components]", setup)
+        self.assertIn("windowmanager='marco'", setup)
+        self.assertIn("required-components-list=['windowmanager', 'panel', 'filemanager']", setup)
 
     def test_launcher_runs_mate_after_starting_the_system_bus(self):
         with tempfile.TemporaryDirectory() as directory:
