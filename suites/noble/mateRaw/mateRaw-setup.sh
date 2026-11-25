@@ -56,15 +56,15 @@ user-db:user
 system-db:local
 EOF_DCONF
 
-# Keep MATE's session requirements valid for a PRoot desktop without a dock
-# service, and select Marco explicitly rather than relying on session defaults.
+# dconf keyfile groups use the schema's PATH, not its schema ID. The
+# org.mate.session schema is installed at /org/mate/desktop/session/.
+# Keep the required component list PRoot-friendly and select Marco explicitly.
 cat > /etc/dconf/db/local.d/00-udroid-mate-session <<'EOF_SESSION_DCONF'
-[org/mate/session]
+[org/mate/desktop/session]
 required-components-list=['windowmanager', 'panel', 'filemanager']
 
-[org/mate/session/required-components]
+[org/mate/desktop/session/required-components]
 windowmanager='marco'
-dock=''
 EOF_SESSION_DCONF
 
 if command -v dconf >/dev/null 2>&1; then
