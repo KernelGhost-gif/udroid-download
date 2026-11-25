@@ -162,14 +162,14 @@ do_unmount() { :; }
         self.assertEqual(fixes.count("XKB_CONFIG_ROOT=/usr/share/X11/xkb"), 2)
         self.assertIn("WINDOW_MANAGER=/usr/bin/marco", fixes)
 
-    def test_default_mate_session_uses_marco_without_a_dock_component(self):
+    def test_default_mate_session_uses_the_schema_dconf_path_and_marco(self):
         setup = (VARIANT / "mateRaw-setup.sh").read_text()
-        self.assertIn("[org/mate/session]", setup)
-        self.assertIn("[org/mate/session/required-components]", setup)
+        self.assertIn("[org/mate/desktop/session]", setup)
+        self.assertIn("[org/mate/desktop/session/required-components]", setup)
         self.assertIn("windowmanager='marco'", setup)
-        self.assertIn("dock=''", setup)
         self.assertIn("required-components-list=['windowmanager', 'panel', 'filemanager']", setup)
-        self.assertNotIn("[org/mate/desktop/session]", setup)
+        self.assertNotIn("[org/mate/session]", setup)
+        self.assertNotIn("dock=''", setup)
 
     def test_launcher_runs_mate_after_starting_the_system_bus(self):
         with tempfile.TemporaryDirectory() as directory:
