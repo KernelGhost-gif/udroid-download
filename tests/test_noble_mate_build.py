@@ -147,6 +147,9 @@ do_unmount() { :; }
         self.assertIn("tigervnc-xorg-extension", setup)
         self.assertIn("mate-indicator-applet", setup)
         self.assertIn("mate-applet-brisk-menu", setup)
+        self.assertIn("mate-tweak", setup)
+        self.assertIn("plank", setup)
+        self.assertIn("ubuntu-mate-wallpapers-hirsute", setup)
         for package in (
             "ayatana-indicator-application",
             "ayatana-indicator-datetime",
@@ -173,8 +176,14 @@ do_unmount() { :; }
         self.assertIn("gvfs-backends", setup)
         self.assertIn("udroid-web-browser.desktop", setup)
         self.assertIn("epiphany %U", setup)
-        self.assertIn("Yaru-MATE-light", setup)
-        self.assertIn("computer-icon-visible=true", setup)
+        self.assertIn("Yaru-MATE-dark", setup)
+        self.assertIn("default-layout='mutiny'", setup)
+        self.assertIn("dock='plank'", setup)
+        self.assertIn("Hirsute-Hippo_WP_2560x1440_Grey.png", setup)
+        self.assertIn("Mutiny-dark", setup)
+        self.assertIn("settings-overlay/config/plank/dock1/launchers", setup)
+        self.assertIn("udroid-web-browser.desktop", setup)
+        self.assertIn("computer-icon-visible=false", setup)
         self.assertNotIn("mate-desktop-environment-core", setup)
         self.assertNotIn("lightdm", setup)
         self.assertNotIn("\n    xorg", setup)
@@ -188,6 +197,9 @@ do_unmount() { :; }
         self.assertIn('mate-session "$@" &', fixes)
         self.assertIn("caja --no-default-window --force-desktop", fixes)
         self.assertIn("gsettings get org.mate.panel default-layout", fixes)
+        self.assertIn("gsettings set org.mate.session.required-components dock \"plank\"", fixes)
+        self.assertIn("dconf write /net/launchpad/plank/docks/dock1/position", fixes)
+        self.assertIn("mate-desktop-state.txt", fixes)
         self.assertIn("Ubuntu MATE panel layout:", fixes)
         self.assertIn("UDROID_MATE_RUNTIME_DIR", fixes)
         self.assertEqual(fixes.count("XKB_CONFIG_ROOT=/usr/share/X11/xkb"), 2)
@@ -200,9 +212,10 @@ do_unmount() { :; }
         self.assertIn("windowmanager='marco'", setup)
         self.assertIn("panel='mate-panel'", setup)
         self.assertIn("filemanager='caja'", setup)
-        self.assertIn("default-layout='familiar'", setup)
-        self.assertIn("picture-filename='/usr/share/backgrounds/ubuntu-mate-common/Green-Wall-Logo.png'", setup)
-        self.assertIn("required-components-list=['windowmanager', 'panel', 'filemanager']", setup)
+        self.assertIn("default-layout='mutiny'", setup)
+        self.assertIn("dock='plank'", setup)
+        self.assertIn("picture-filename='/usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png'", setup)
+        self.assertIn("required-components-list=['windowmanager', 'panel', 'filemanager', 'dock']", setup)
         self.assertNotIn("[org/mate/session]", setup)
         self.assertNotIn("dock=''", setup)
 
@@ -228,8 +241,18 @@ do_unmount() { :; }
                     f"touch '{state}'\n"
                 ),
                 "rm": "#!/bin/sh\nexit 0\n",
-                "gsettings": "#!/bin/sh\necho \"'familiar'\"\n",
-                "dconf": "#!/bin/sh\nexit 0\n",
+                "gsettings": (
+                    "#!/bin/sh\n"
+                    "if [ \"$1\" = get ] && [ \"$2\" = org.mate.panel ] && [ \"$3\" = default-layout ]; then echo \"'mutiny'\"; fi\n"
+                    "if [ \"$1\" = get ] && [ \"$2\" = org.mate.session.required-components ] && [ \"$3\" = dock ]; then echo \"'plank'\"; fi\n"
+                    "exit 0\n"
+                ),
+                "dconf": (
+                    "#!/bin/sh\n"
+                    "if [ \"$1\" = read ] && [ \"$2\" = /net/launchpad/plank/docks/dock1/position ]; then echo \"'left'\"; fi\n"
+                    "exit 0\n"
+                ),
+                "plank": "#!/bin/sh\nexit 0\n",
                 "pgrep": "#!/bin/sh\nexit 0\n",
                 "caja": (
                     "#!/bin/sh\n"
@@ -268,7 +291,10 @@ do_unmount() { :; }
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(state.exists(), "system D-Bus was not started")
             self.assertEqual(started.read_text().strip(), ":0|MATE|x11")
-            self.assertIn("Ubuntu MATE panel layout: 'familiar'", result.stdout)
+            self.assertIn("Ubuntu MATE panel layout: 'mutiny'", result.stdout)
+            self.assertIn("Required dock component: 'plank'", result.stdout)
+            self.assertIn("Plank dock position: 'left'", result.stdout)
+            self.assertTrue((runtime / "mate-desktop-state.txt").exists())
             self.assertTrue(caja_started.exists(), "Caja desktop was not launched")
             self.assertEqual(caja_started.read_text().strip(), "--no-default-window --force-desktop")
             self.assertTrue(runtime.is_dir())
