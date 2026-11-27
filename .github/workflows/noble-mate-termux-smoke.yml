@@ -6,6 +6,7 @@ on:
     paths:
       - ".github/workflows/noble-mate-termux-smoke.yml"
       - ".github/scripts/termux-mate-smoke.sh"
+      - ".github/scripts/check-mate-screenshot.py"
       - ".github/scripts/termux-ci-connect-proxy.py"
       - "build.sh"
       - "fs-cook"
