@@ -65,7 +65,7 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
     def test_requires_the_full_mate_desktop_for_success(self):
         self.assertIn('if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ]; then', self.content)
         self.assertIn('pgrep -x caja', self.content)
-        self.assertIn('Caja desktop process did not stay running', self.content)
+        self.assertIn('log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok caja_desktop=$caja_ok"', self.content)
 
     def test_screenshot_is_checked_for_a_rendered_desktop_not_a_black_canvas(self):
         checker = ROOT / ".github/scripts/check-mate-screenshot.py"
