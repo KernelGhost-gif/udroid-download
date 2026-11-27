@@ -67,6 +67,11 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn('pgrep -x caja', self.content)
         self.assertIn('log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok caja_desktop=$caja_ok"', self.content)
 
+    def test_screenshot_requires_a_visible_left_side_plank_dock(self):
+        checker = ROOT / ".github/scripts/check-mate-screenshot.py"
+        self.assertIn("left_dock_ratio < 0.20", checker.read_text())
+        self.assertIn("Mutiny's vertical Plank dock", checker.read_text())
+
     def test_screenshot_is_checked_for_a_rendered_desktop_not_a_black_canvas(self):
         checker = ROOT / ".github/scripts/check-mate-screenshot.py"
         self.assertTrue(checker.is_file())
@@ -130,8 +135,11 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
             "ubuntu-mate-themes",
             "ubuntu-mate-icon-themes",
             "ubuntu-mate-wallpapers-common",
+            "ubuntu-mate-wallpapers-hirsute",
             "mate-indicator-applet",
             "mate-applet-brisk-menu",
+            "plank",
+            "mate-tweak",
         ):
             self.assertIn(package, self.content)
         self.assertIn("dpkg-query", self.content)
@@ -159,24 +167,26 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn("Successfully activated service 'org.mate.panel.applet.$factory'", self.content)
         self.assertIn("for factory in IndicatorAppletCompleteFactory BriskMenuFactory", self.content)
 
-    def test_smoke_verifies_the_actual_familiar_panel_objects(self):
+    def test_smoke_verifies_mutiny_and_the_plank_left_dock(self):
         for expected in (
-            "mate-panel-dconf.txt",
-            "toplevel-id-list=.*'top'.*'bottom'",
-            "BriskMenuFactory::BriskMenu",
-            "NotificationAreaAppletFactory::NotificationArea",
-            "IndicatorAppletCompleteFactory::IndicatorAppletComplete",
-            "WnckletFactory::ShowDesktopApplet",
-            "WnckletFactory::WindowListApplet",
-            "WnckletFactory::WorkspaceSwitcherApplet",
-            "TrashAppletFactory::TrashApplet",
+            "mutiny.layout",
+            "mutiny.dock",
+            "default-layout='mutiny'",
+            "Ubuntu MATE panel layout: 'mutiny'",
+            "dock_component",
+            "dock_position",
+            "pgrep -x plank",
+            "plank_dock=$dock_ok",
+            "Hirsute-Hippo_WP_2560x1440_Grey.png",
+            "Yaru-MATE-dark",
         ):
             self.assertIn(expected, self.content)
 
-    def test_panel_snapshot_is_taken_by_the_mate_session_launcher(self):
+    def test_launcher_captures_runtime_mutiny_settings(self):
         fixes = (ROOT / "suites/noble/mateRaw/mateRaw-fixes.sh").read_text()
-        self.assertIn("dconf dump /org/mate/panel/", fixes)
-        self.assertIn("mate-panel-dconf.txt", self.content)
+        self.assertIn("mate-desktop-state.txt", fixes)
+        self.assertIn("dconf read /net/launchpad/plank/docks/dock1/position", fixes)
+        self.assertIn("dock='plank'", (ROOT / "suites/noble/mateRaw/mateRaw-setup.sh").read_text())
 
     def test_smoke_rejects_the_unavailable_firefox_snap_launcher(self):
         self.assertIn("udroid-web-browser.desktop", self.content)
