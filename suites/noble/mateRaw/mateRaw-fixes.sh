@@ -58,6 +58,7 @@ command -v mate-session >/dev/null 2>&1 || die "mate-session is not installed"
 command -v dbus-send >/dev/null 2>&1 || die "dbus-send is not installed"
 command -v dbus-daemon >/dev/null 2>&1 || die "dbus-daemon is not installed"
 command -v dbus-run-session >/dev/null 2>&1 || die "dbus-run-session is not installed"
+command -v gsettings >/dev/null 2>&1 || die "gsettings is not installed"
 
 if command -v xdpyinfo >/dev/null 2>&1 &&
    ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
@@ -90,6 +91,15 @@ dbus-send --system --print-reply \
 # Wait for Marco and the panel, then explicitly launch Caja's desktop mode.
 exec dbus-run-session -- bash -c '
 set -Eeuo pipefail
+
+# Make the same two-panel Ubuntu MATE layout used by Jammy explicit instead
+# of silently accepting the generic MATE panel fallback.
+panel_layout="$(gsettings get org.mate.panel default-layout)"
+if [[ "$panel_layout" != "'\''familiar'\''" ]]; then
+    printf "[udroid-mate] ERROR: expected familiar panel layout, got %s\\n" "$panel_layout" >&2
+    exit 1
+fi
+printf "[udroid-mate] Ubuntu MATE panel layout: %s\\n" "$panel_layout"
 
 mate-session "$@" &
 session_pid=$!
