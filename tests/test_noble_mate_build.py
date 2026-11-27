@@ -182,6 +182,8 @@ do_unmount() { :; }
         self.assertIn("Hirsute-Hippo_WP_2560x1440_Grey.png", setup)
         fixes = (VARIANT / "mateRaw-fixes.sh").read_text()
         self.assertIn("Mutiny-dark", fixes)
+        self.assertIn("window-type='dash'", setup)
+        self.assertIn("label-visible=true", setup)
         self.assertIn("settings-overlay/config/plank/dock1/launchers", setup)
         self.assertIn("udroid-web-browser.desktop", setup)
         self.assertIn("computer-icon-visible=false", setup)
@@ -246,6 +248,7 @@ do_unmount() { :; }
                     "#!/bin/sh\n"
                     "if [ \"$1\" = get ] && [ \"$2\" = org.mate.panel ] && [ \"$3\" = default-layout ]; then echo \"'mutiny'\"; fi\n"
                     "if [ \"$1\" = get ] && [ \"$2\" = org.mate.session.required-components ] && [ \"$3\" = dock ]; then echo \"'plank'\"; fi\n"
+                    "if [ \"$1\" = get ] && [ \"$2\" = com.solus-project.brisk-menu ] && [ \"$3\" = window-type ]; then echo \"'dash'\"; fi\n"
                     "exit 0\n"
                 ),
                 "dconf": (
@@ -295,6 +298,7 @@ do_unmount() { :; }
             self.assertIn("Ubuntu MATE panel layout: 'mutiny'", result.stdout)
             self.assertIn("Required dock component: 'plank'", result.stdout)
             self.assertIn("Plank dock position: 'left'", result.stdout)
+            self.assertIn("brisk_menu_type='dash'", (runtime / "mate-desktop-state.txt").read_text())
             self.assertTrue((runtime / "mate-desktop-state.txt").exists())
             self.assertTrue(caja_started.exists(), "Caja desktop was not launched")
             self.assertEqual(caja_started.read_text().strip(), "--no-default-window --force-desktop")
