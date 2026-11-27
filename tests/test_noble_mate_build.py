@@ -203,6 +203,7 @@ do_unmount() { :; }
                     f"touch '{state}'\n"
                 ),
                 "rm": "#!/bin/sh\nexit 0\n",
+                "gsettings": "#!/bin/sh\necho 'familiar'\n",
                 "pgrep": "#!/bin/sh\nexit 0\n",
                 "caja": (
                     "#!/bin/sh\n"
