@@ -100,6 +100,11 @@ jobs:
       - name: Checkout smoke-test scripts
         uses: actions/checkout@v4
 
+      - name: Install screenshot validation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pil
+
       - name: Download AMD64 MATE rootfs
         uses: actions/download-artifact@v4
         with:
