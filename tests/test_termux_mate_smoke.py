@@ -125,9 +125,22 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         setup = (ROOT / "suites/noble/mateRaw/mateRaw-setup.sh").read_text()
         self.assertIn("mate-indicator-applet", setup)
         self.assertIn("mate-applet-brisk-menu", setup)
+        for package in (
+            "ubuntu-mate-desktop",
+            "ubuntu-mate-themes",
+            "ubuntu-mate-icon-themes",
+            "ubuntu-mate-wallpapers-common",
+            "mate-indicator-applet",
+            "mate-applet-brisk-menu",
+        ):
+            self.assertIn(package, self.content)
         self.assertIn("dpkg-query", self.content)
         self.assertIn("/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin", self.content)
         self.assertIn("install ok installed", self.content)
+        self.assertIn('default-layout=\'familiar\'', self.content)
+        self.assertIn('Ubuntu MATE panel layout: \'familiar\'', self.content)
+        self.assertIn("familiar.layout", self.content)
+        self.assertIn("Green-Wall-Logo.png", self.content)
 
     def test_emulator_enables_kvm_and_only_uses_tcg_as_fallback(self):
         workflow = (ROOT / ".github/workflows/noble-mate-termux-smoke.yml").read_text()
