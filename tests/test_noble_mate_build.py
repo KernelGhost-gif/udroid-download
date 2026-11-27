@@ -157,7 +157,9 @@ do_unmount() { :; }
         self.assertIn("org.freedesktop.login1.service", fixes)
         self.assertIn('xdpyinfo -display "$DISPLAY"', fixes)
         self.assertIn("dbus-daemon --system --fork", fixes)
-        self.assertIn("dbus-run-session -- mate-session", fixes)
+        self.assertIn("dbus-run-session -- bash -c", fixes)
+        self.assertIn('mate-session "$@" &', fixes)
+        self.assertIn("caja --no-default-window --force-desktop", fixes)
         self.assertIn("UDROID_MATE_RUNTIME_DIR", fixes)
         self.assertEqual(fixes.count("XKB_CONFIG_ROOT=/usr/share/X11/xkb"), 2)
         self.assertIn("WINDOW_MANAGER=/usr/bin/marco", fixes)
@@ -167,6 +169,9 @@ do_unmount() { :; }
         self.assertIn("[org/mate/desktop/session]", setup)
         self.assertIn("[org/mate/desktop/session/required-components]", setup)
         self.assertIn("windowmanager='marco'", setup)
+        self.assertIn("panel='mate-panel'", setup)
+        self.assertIn("filemanager='caja'", setup)
+        self.assertIn("picture-filename='/usr/share/backgrounds/ubuntu-mate-common/Green-Wall.png'", setup)
         self.assertIn("required-components-list=['windowmanager', 'panel', 'filemanager']", setup)
         self.assertNotIn("[org/mate/session]", setup)
         self.assertNotIn("dock=''", setup)
@@ -179,6 +184,7 @@ do_unmount() { :; }
             state = root / "system-bus-ready"
             started = root / "mate-started"
             runtime = root / "runtime"
+            caja_started = root / "caja-started"
 
             scripts = {
                 "xdpyinfo": "#!/bin/sh\nexit 0\n",
@@ -223,6 +229,8 @@ do_unmount() { :; }
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(state.exists(), "system D-Bus was not started")
             self.assertEqual(started.read_text().strip(), ":0|MATE|x11")
+            self.assertTrue(caja_started.exists(), "Caja desktop was not launched")
+            self.assertEqual(caja_started.read_text().strip(), "--no-default-window --force-desktop")
             self.assertTrue(runtime.is_dir())
             self.assertEqual(runtime.stat().st_mode & 0o777, 0o700)
 
