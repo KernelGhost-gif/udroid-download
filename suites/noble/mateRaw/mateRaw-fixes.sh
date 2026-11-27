@@ -155,6 +155,9 @@ if [[ "$desktop_ready" != true ]]; then
 fi
 printf "[udroid-mate] Caja desktop is running (pid %s)\n" "$desktop_pid"
 
+# Capture the layout after its objects and applets have been instantiated.
+dconf dump /org/mate/panel/ > "$XDG_RUNTIME_DIR/mate-panel-dconf.txt"
+
 wait "$session_pid"
 ' udroid-mate-session "$@"
 EOF_LAUNCHER
