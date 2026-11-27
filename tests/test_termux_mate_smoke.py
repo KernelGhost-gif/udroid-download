@@ -62,10 +62,11 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn('nohup "$PREFIX/bin/proot" \\', self.content)
         self.assertIn("/usr/bin/env -i", self.content)
 
-    def test_requires_the_full_mate_desktop_for_success(self):
-        self.assertIn('if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ]; then', self.content)
+    def test_requires_the_full_mate_desktop_and_plank_dock_for_success(self):
+        self.assertIn('if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ] || [ "$dock_ok" != true ]; then', self.content)
         self.assertIn('pgrep -x caja', self.content)
-        self.assertIn('log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok caja_desktop=$caja_ok"', self.content)
+        self.assertIn('pgrep -x plank', self.content)
+        self.assertIn('plank_dock=$dock_ok', self.content)
 
     def test_screenshot_requires_a_visible_left_side_plank_dock(self):
         checker = ROOT / ".github/scripts/check-mate-screenshot.py"
@@ -145,10 +146,11 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn("dpkg-query", self.content)
         self.assertIn("/usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin", self.content)
         self.assertIn("install ok installed", self.content)
-        self.assertIn('default-layout=\'familiar\'', self.content)
-        self.assertIn('Ubuntu MATE panel layout: \'familiar\'', self.content)
-        self.assertIn("familiar.layout", self.content)
-        self.assertIn("Green-Wall-Logo.png", self.content)
+        self.assertIn("default-layout=\'mutiny\'", self.content)
+        self.assertIn("Ubuntu MATE panel layout: \'mutiny\'", self.content)
+        self.assertIn("mutiny.layout", self.content)
+        self.assertIn("mutiny.dock", self.content)
+        self.assertIn("Hirsute-Hippo_WP_2560x1440_Grey.png", self.content)
 
     def test_emulator_enables_kvm_and_only_uses_tcg_as_fallback(self):
         workflow = (ROOT / ".github/workflows/noble-mate-termux-smoke.yml").read_text()
@@ -173,14 +175,14 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
             "mutiny.dock",
             "default-layout='mutiny'",
             "Ubuntu MATE panel layout: 'mutiny'",
-            "dock_component",
-            "dock_position",
             "pgrep -x plank",
             "plank_dock=$dock_ok",
             "Hirsute-Hippo_WP_2560x1440_Grey.png",
-            "Yaru-MATE-dark",
         ):
             self.assertIn(expected, self.content)
+        fixes = (ROOT / "suites/noble/mateRaw/mateRaw-fixes.sh").read_text()
+        for expected in ("dock_component", "dock_position", "Yaru-MATE-dark", "Mutiny-dark"):
+            self.assertIn(expected, fixes)
 
     def test_launcher_captures_runtime_mutiny_settings(self):
         fixes = (ROOT / "suites/noble/mateRaw/mateRaw-fixes.sh").read_text()
