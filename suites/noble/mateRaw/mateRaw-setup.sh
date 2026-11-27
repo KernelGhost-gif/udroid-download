@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Install the MATE desktop without a display manager or a bundled X server.
+# Install the full Ubuntu MATE desktop package set used by Jammy. Xorg is a
+# dependency of ubuntu-mate-desktop, but it is never started; Termux:X11 is the
+# active display server and PRoot does not use LightDM.
 set -Eeuo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
@@ -24,18 +26,20 @@ apt-get install -y --no-install-recommends \
     mate-applets \
     mate-indicator-applet \
     mate-applet-brisk-menu \
-    mate-desktop-environment-core \
+    ubuntu-mate-desktop \
     mate-utils \
     mesa-utils \
     procps \
     ubuntu-mate-default-settings \
     ubuntu-mate-icon-themes \
+    ubuntu-mate-themes \
     ubuntu-mate-wallpapers-common \
     x11-utils \
     x11-xserver-utils \
     xauth \
     xdg-user-dirs \
-    xterm
+    xterm \
+    tigervnc-xorg-extension
 
 # Use a predictable locale in graphical applications.
 if [ -f /etc/locale.gen ]; then
@@ -68,10 +72,13 @@ windowmanager='marco'
 panel='mate-panel'
 filemanager='caja'
 
+[org/mate/panel]
+default-layout='familiar'
+
 # Root sessions do not reliably launch Caja as the desktop manager. The
 # launcher starts Caja explicitly; these values provide its desktop backdrop.
 [org/mate/desktop/background]
-picture-filename='/usr/share/backgrounds/ubuntu-mate-common/Green-Wall.png'
+picture-filename='/usr/share/backgrounds/ubuntu-mate-common/Green-Wall-Logo.png'
 picture-options='zoom'
 EOF_SESSION_DCONF
 
