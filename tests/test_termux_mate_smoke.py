@@ -181,7 +181,7 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         ):
             self.assertIn(expected, self.content)
         fixes = (ROOT / "suites/noble/mateRaw/mateRaw-fixes.sh").read_text()
-        for expected in ("dock_component", "dock_position", "Yaru-MATE-dark", "Mutiny-dark"):
+        for expected in ("dock_component", "dock_position", "brisk_menu_type", "window-type \"dash\"", "Yaru-MATE-dark", "Mutiny-dark"):
             self.assertIn(expected, fixes)
 
     def test_launcher_captures_runtime_mutiny_settings(self):
