@@ -85,7 +85,68 @@ dbus-send --system --print-reply \
     --dest=org.freedesktop.DBus / org.freedesktop.DBus.ListNames \
     >/dev/null 2>&1 || die "the system D-Bus is not responding"
 
-exec dbus-run-session -- mate-session "$@"
+# In a root-owned PRoot session, mate-session may start the panel and WM
+# without starting Caja as the desktop manager. That leaves a black desktop.
+# Wait for Marco and the panel, then explicitly launch Caja's desktop mode.
+exec dbus-run-session -- bash -c '
+set -Eeuo pipefail
+
+mate-session "$@" &
+session_pid=$!
+desktop_pid=""
+
+cleanup_session() {
+    if [[ -n "$desktop_pid" ]]; then
+        kill "$desktop_pid" 2>/dev/null || true
+    fi
+    kill "$session_pid" 2>/dev/null || true
+    wait "$session_pid" 2>/dev/null || true
+}
+trap cleanup_session EXIT INT TERM
+
+components_ready=false
+for attempt in $(seq 1 90); do
+    if ! kill -0 "$session_pid" 2>/dev/null; then
+        wait "$session_pid"
+        exit $?
+    fi
+    if pgrep -x marco >/dev/null 2>&1 &&
+       pgrep -x mate-panel >/dev/null 2>&1; then
+        components_ready=true
+        break
+    fi
+    sleep 1
+done
+
+if [[ "$components_ready" != true ]]; then
+    printf "[udroid-mate] ERROR: Marco and MATE Panel did not become ready\n" >&2
+    exit 1
+fi
+
+# Caja does not automatically claim the desktop in every root session.
+# -n keeps it from opening a file-manager window; --force-desktop makes it
+# draw the desktop, wallpaper and desktop icons.
+caja --no-default-window --force-desktop \
+    >> "$XDG_RUNTIME_DIR/caja-desktop.log" 2>&1 &
+desktop_pid=$!
+
+desktop_ready=false
+for attempt in $(seq 1 30); do
+    if pgrep -x caja >/dev/null 2>&1; then
+        desktop_ready=true
+        break
+    fi
+    sleep 1
+done
+if [[ "$desktop_ready" != true ]]; then
+    printf "[udroid-mate] ERROR: Caja desktop process did not stay running\n" >&2
+    cat "$XDG_RUNTIME_DIR/caja-desktop.log" >&2 || true
+    exit 1
+fi
+printf "[udroid-mate] Caja desktop is running (pid %s)\n" "$desktop_pid"
+
+wait "$session_pid"
+' udroid-mate-session "$@"
 EOF_LAUNCHER
 chmod 0755 /usr/local/bin/udroid-mate-x11
 
