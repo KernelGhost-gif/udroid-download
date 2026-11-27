@@ -27,6 +27,7 @@ apt-get install -y --no-install-recommends \
     mate-desktop-environment-core \
     mate-utils \
     mesa-utils \
+    procps \
     ubuntu-mate-default-settings \
     ubuntu-mate-icon-themes \
     ubuntu-mate-wallpapers-common \
