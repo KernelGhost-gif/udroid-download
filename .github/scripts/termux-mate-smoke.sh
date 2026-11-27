@@ -25,7 +25,7 @@ collect_diagnostics() {
   adb shell run-as com.termux /system/bin/ls -l "$TERMUX_PREFIX/bin/bash" \
     > "$OUT_DIR/termux-bash-file.txt" 2>&1
   : > "$OUT_DIR/termux-runtime-logs.txt"
-  for f in mate-session.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt termux-main-InRelease; do
+  for f in mate-session.log caja-desktop.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt termux-main-InRelease; do
     echo "===== $f =====" >> "$OUT_DIR/termux-runtime-logs.txt"
     adb shell run-as com.termux /system/bin/cat "$TERMUX_HOME/$f" \
       >> "$OUT_DIR/termux-runtime-logs.txt" 2>&1 || true
@@ -241,6 +241,8 @@ mkdir -p "$ROOTFS"
 run_phase "Extract Noble MATE rootfs" 600 tar -xzf "$ARCHIVE" -C "$ROOTFS"
 test -x "$ROOTFS/usr/bin/mate-session"
 test -x "$ROOTFS/usr/bin/mate-panel"
+test -x "$ROOTFS/usr/bin/caja"
+test -s "$ROOTFS/usr/share/backgrounds/ubuntu-mate-common/Green-Wall.png"
 test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
 
 # termux-exec rewrites absolute executable paths for Android; that behavior
@@ -319,25 +321,27 @@ log "Waiting for MATE session, panel, and window manager"
 session_ok=false
 panel_ok=false
 wm_ok=false
+caja_ok=false
 for attempt in $(seq 1 90); do
   pgrep -f '[m]ate-session' >/dev/null 2>&1 && session_ok=true
   pgrep -f '[m]ate-panel' >/dev/null 2>&1 && panel_ok=true
   pgrep -f '[m]arco' >/dev/null 2>&1 && wm_ok=true
-  if [ "$session_ok" = true ] && [ "$panel_ok" = true ] && [ "$wm_ok" = true ]; then
+  pgrep -x caja >/dev/null 2>&1 && caja_ok=true
+  if [ "$session_ok" = true ] && [ "$panel_ok" = true ] && [ "$wm_ok" = true ] && [ "$caja_ok" = true ]; then
     break
   fi
   sleep 2
 done
 
-log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok"
-pgrep -af 'mate-session|mate-panel|marco|caja' > "$HOME/mate-processes.txt" || true
-if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ]; then
+log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok caja_desktop=$caja_ok"
+pgrep -af 'mate-session|mate-panel|marco|caja|mate-settings-daemon' > "$HOME/mate-processes.txt" || true
+if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ]; then
   cat "$HOME/mate-session.log" >&2 || true
   cat "$HOME/termux-x11.log" >&2 || true
   exit 21
 fi
 
-sleep 8
+sleep 12
 # Verify each configured panel applet package is installed.
 for package in mate-indicator-applet mate-applet-brisk-menu; do
   run_phase "Verify configured MATE panel package: $package" 30 \
@@ -430,6 +434,7 @@ echo "::endgroup::"
 adb shell screencap -p /sdcard/termux-mate-screen.png
 adb pull /sdcard/termux-mate-screen.png "$OUT_DIR/termux-mate-screen.png"
 test -s "$OUT_DIR/termux-mate-screen.png"
+python3 "$GITHUB_WORKSPACE/.github/scripts/check-mate-screenshot.py" "$OUT_DIR/termux-mate-screen.png"
 echo "::endgroup::"
 
 echo "Termux MATE integration smoke test completed"
