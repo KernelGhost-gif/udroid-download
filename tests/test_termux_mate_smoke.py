@@ -62,8 +62,16 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn('nohup "$PREFIX/bin/proot" \\', self.content)
         self.assertIn("/usr/bin/env -i", self.content)
 
-    def test_requires_the_mate_window_manager_for_success(self):
-        self.assertIn('if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ]; then', self.content)
+    def test_requires_the_full_mate_desktop_for_success(self):
+        self.assertIn('if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ]; then', self.content)
+        self.assertIn('pgrep -x caja', self.content)
+        self.assertIn('Caja desktop process did not stay running', self.content)
+
+    def test_screenshot_is_checked_for_a_rendered_desktop_not_a_black_canvas(self):
+        checker = ROOT / ".github/scripts/check-mate-screenshot.py"
+        self.assertTrue(checker.is_file())
+        self.assertIn('python3 "$GITHUB_WORKSPACE/.github/scripts/check-mate-screenshot.py"', self.content)
+        self.assertIn("chromatic_ratio < 0.10", checker.read_text())
 
 
     def test_uses_adb_reverse_https_tunnel_and_official_cdn_sources(self):
