@@ -415,7 +415,7 @@ if [ ! -s "$desktop_state" ]; then
   cat "$HOME/mate-session.log" >&2 || true
   exit 30
 fi
-for expected in "mutiny" "plank" "left" "Yaru-MATE-dark" "Hirsute-Hippo_WP_2560x1440_Grey.png"; do
+for expected in "mutiny" "plank" "left" "dash" "Yaru-MATE-dark" "Hirsute-Hippo_WP_2560x1440_Grey.png"; do
   if ! grep -Fq "$expected" "$desktop_state"; then
     log "The live desktop state is missing expected Mutiny setting: $expected"
     cat "$desktop_state" >&2
