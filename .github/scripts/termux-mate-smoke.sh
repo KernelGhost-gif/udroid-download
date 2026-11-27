@@ -434,7 +434,7 @@ echo "::endgroup::"
 adb shell screencap -p /sdcard/termux-mate-screen.png
 adb pull /sdcard/termux-mate-screen.png "$OUT_DIR/termux-mate-screen.png"
 test -s "$OUT_DIR/termux-mate-screen.png"
-python3 "$GITHUB_WORKSPACE/.github/scripts/check-mate-screenshot.py" "$OUT_DIR/termux-mate-screen.png"
+/usr/bin/python3 "$GITHUB_WORKSPACE/.github/scripts/check-mate-screenshot.py" "$OUT_DIR/termux-mate-screen.png"
 echo "::endgroup::"
 
 echo "Termux MATE integration smoke test completed"
