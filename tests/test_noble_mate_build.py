@@ -142,13 +142,15 @@ do_unmount() { :; }
 
     def test_setup_is_lightweight_and_uses_noble_mate_packages(self):
         setup = (VARIANT / "mateRaw-setup.sh").read_text()
-        self.assertIn("mate-desktop-environment-core", setup)
+        self.assertIn("ubuntu-mate-desktop", setup)
+        self.assertIn("ubuntu-mate-themes", setup)
+        self.assertIn("tigervnc-xorg-extension", setup)
         self.assertIn("mate-indicator-applet", setup)
         self.assertIn("mate-applet-brisk-menu", setup)
         self.assertIn("ubuntu-mate-default-settings", setup)
         self.assertIn("ubuntu-mate-icon-themes", setup)
         self.assertIn("gvfs-backends", setup)
-        self.assertNotIn("ubuntu-mate-desktop", setup)
+        self.assertNotIn("mate-desktop-environment-core", setup)
         self.assertNotIn("lightdm", setup)
         self.assertNotIn("\n    xorg", setup)
 
@@ -171,7 +173,8 @@ do_unmount() { :; }
         self.assertIn("windowmanager='marco'", setup)
         self.assertIn("panel='mate-panel'", setup)
         self.assertIn("filemanager='caja'", setup)
-        self.assertIn("picture-filename='/usr/share/backgrounds/ubuntu-mate-common/Green-Wall.png'", setup)
+        self.assertIn("default-layout='familiar'", setup)
+        self.assertIn("picture-filename='/usr/share/backgrounds/ubuntu-mate-common/Green-Wall-Logo.png'", setup)
         self.assertIn("required-components-list=['windowmanager', 'panel', 'filemanager']", setup)
         self.assertNotIn("[org/mate/session]", setup)
         self.assertNotIn("dock=''", setup)
