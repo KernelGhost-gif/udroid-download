@@ -162,7 +162,6 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
     def test_smoke_verifies_the_actual_familiar_panel_objects(self):
         for expected in (
             "mate-panel-dconf.txt",
-            "dconf dump /org/mate/panel/",
             "toplevel-id-list=.*'top'.*'bottom'",
             "BriskMenuFactory::BriskMenu",
             "NotificationAreaAppletFactory::NotificationArea",
@@ -173,6 +172,11 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
             "TrashAppletFactory::TrashApplet",
         ):
             self.assertIn(expected, self.content)
+
+    def test_panel_snapshot_is_taken_by_the_mate_session_launcher(self):
+        fixes = (ROOT / "suites/noble/mateRaw/mateRaw-fixes.sh").read_text()
+        self.assertIn("dconf dump /org/mate/panel/", fixes)
+        self.assertIn("mate-panel-dconf.txt", self.content)
 
     def test_smoke_rejects_the_unavailable_firefox_snap_launcher(self):
         self.assertIn("udroid-web-browser.desktop", self.content)
