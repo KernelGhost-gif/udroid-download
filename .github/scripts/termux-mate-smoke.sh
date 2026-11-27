@@ -25,7 +25,7 @@ collect_diagnostics() {
   adb shell run-as com.termux /system/bin/ls -l "$TERMUX_PREFIX/bin/bash" \
     > "$OUT_DIR/termux-bash-file.txt" 2>&1
   : > "$OUT_DIR/termux-runtime-logs.txt"
-  for f in mate-session.log caja-desktop.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt termux-main-InRelease; do
+  for f in mate-session.log caja-desktop.log mate-panel-dconf.txt termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt termux-main-InRelease; do
     echo "===== $f =====" >> "$OUT_DIR/termux-runtime-logs.txt"
     adb shell run-as com.termux /system/bin/cat "$TERMUX_HOME/$f" \
       >> "$OUT_DIR/termux-runtime-logs.txt" 2>&1 || true
@@ -244,6 +244,12 @@ test -x "$ROOTFS/usr/bin/mate-panel"
 test -x "$ROOTFS/usr/bin/caja"
 test -s "$ROOTFS/usr/share/backgrounds/ubuntu-mate-common/Green-Wall-Logo.png"
 test -s "$ROOTFS/usr/share/mate-panel/layouts/familiar.layout"
+test -s "$ROOTFS/usr/share/applications/udroid-web-browser.desktop"
+if grep -Fq '/var/lib/snapd/desktop/applications/firefox_firefox.desktop' \
+    "$ROOTFS/usr/share/mate-panel/layouts/familiar.layout"; then
+  log "The Familiar panel still points to Firefox's unavailable Snap launcher"
+  exit 27
+fi
 test -s "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
 grep -Fq "default-layout='familiar'" "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
 test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
@@ -341,6 +347,9 @@ pgrep -af 'mate-session|mate-panel|marco|caja|mate-settings-daemon' > "$HOME/mat
 if [ -s "$TMPDIR/mate-runtime-termux-ci/caja-desktop.log" ]; then
   cp "$TMPDIR/mate-runtime-termux-ci/caja-desktop.log" "$HOME/caja-desktop.log"
 fi
+if [ -s "$TMPDIR/mate-runtime-termux-ci/mate-panel-dconf.txt" ]; then
+  cp "$TMPDIR/mate-runtime-termux-ci/mate-panel-dconf.txt" "$HOME/mate-panel-dconf.txt"
+fi
 if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ]; then
   cat "$HOME/mate-session.log" >&2 || true
   cat "$HOME/termux-x11.log" >&2 || true
@@ -355,7 +364,17 @@ for package in \
   ubuntu-mate-icon-themes \
   ubuntu-mate-wallpapers-common \
   mate-indicator-applet \
-  mate-applet-brisk-menu
+  mate-applet-brisk-menu \
+  ayatana-indicator-application \
+  ayatana-indicator-datetime \
+  ayatana-indicator-messages \
+  ayatana-indicator-notifications \
+  ayatana-indicator-power \
+  ayatana-indicator-printers \
+  ayatana-indicator-session \
+  ayatana-indicator-sound \
+  atril engrampa eom epiphany-browser gnome-keyring mate-calc mate-media \
+  mate-notification-daemon mate-system-monitor pluma
 do
   run_phase "Verify configured MATE panel package: $package" 30 \
     "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
@@ -378,8 +397,36 @@ if ! grep -Fq "Ubuntu MATE panel layout: 'familiar'" "$HOME/mate-session.log"; t
   exit 29
 fi
 
-# Verify the panel activated both configured applet factories; the desktop
-# process check alone would miss a panel dialog caused by a missing factory.
+# Check the panel state that MATE actually instantiated, not only the
+# selected layout name. Familiar must create both panels and the expected
+# Brisk Menu, notification/indicator area, Wncklet controls, and Trash applet.
+panel_state="$HOME/mate-panel-dconf.txt"
+if [ ! -s "$panel_state" ]; then
+  log "MATE did not produce a runtime panel configuration dump"
+  exit 30
+fi
+if ! grep -Eq "^toplevel-id-list=.*'top'.*'bottom'" "$panel_state"; then
+  log "The live MATE panel state does not contain both Familiar panels"
+  cat "$panel_state" >&2
+  exit 31
+fi
+for applet in \
+  'BriskMenuFactory::BriskMenu' \
+  'NotificationAreaAppletFactory::NotificationArea' \
+  'IndicatorAppletCompleteFactory::IndicatorAppletComplete' \
+  'WnckletFactory::ShowDesktopApplet' \
+  'WnckletFactory::WindowListApplet' \
+  'WnckletFactory::WorkspaceSwitcherApplet' \
+  'TrashAppletFactory::TrashApplet'
+do
+  if ! grep -Fq "applet-iid='$applet'" "$panel_state"; then
+    log "The live Familiar layout is missing applet $applet"
+    cat "$panel_state" >&2
+    exit 32
+  fi
+done
+
+# Verify that MATE D-Bus activated its panel applet factories.
 for factory in IndicatorAppletCompleteFactory BriskMenuFactory; do
   if ! grep -Fq "Successfully activated service 'org.mate.panel.applet.$factory'" "$HOME/mate-session.log"; then
     log "MATE panel did not successfully activate $factory"
