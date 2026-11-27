@@ -335,6 +335,9 @@ done
 
 log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok caja_desktop=$caja_ok"
 pgrep -af 'mate-session|mate-panel|marco|caja|mate-settings-daemon' > "$HOME/mate-processes.txt" || true
+if [ -s "$TMPDIR/mate-runtime-termux-ci/caja-desktop.log" ]; then
+  cp "$TMPDIR/mate-runtime-termux-ci/caja-desktop.log" "$HOME/caja-desktop.log"
+fi
 if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ]; then
   cat "$HOME/mate-session.log" >&2 || true
   cat "$HOME/termux-x11.log" >&2 || true
