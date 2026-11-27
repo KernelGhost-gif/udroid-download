@@ -155,7 +155,10 @@ if [[ "$desktop_ready" != true ]]; then
 fi
 printf "[udroid-mate] Caja desktop is running (pid %s)\n" "$desktop_pid"
 
-# Capture the layout after its objects and applets have been instantiated.
+# Give the panel applet factories time to register before taking the
+# runtime snapshot used by the Android integration test.
+sleep 5
+# Capture the live panel configuration rather than trusting default-layout.
 dconf dump /org/mate/panel/ > "$XDG_RUNTIME_DIR/mate-panel-dconf.txt"
 
 wait "$session_pid"
