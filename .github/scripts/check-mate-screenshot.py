@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
-"""Fail the Android MATE smoke test when the visible desktop canvas is blank."""
+"""Reject a blank MATE desktop or a missing Mutiny left-side Plank dock."""
 
 from pathlib import Path
 import sys
 
 from PIL import Image
+
+
+def ratio(image: Image.Image, predicate) -> float:
+    pixels = list(image.getdata())
+    return sum(1 for pixel in pixels if predicate(pixel)) / len(pixels)
 
 
 def main() -> int:
@@ -24,14 +29,20 @@ def main() -> int:
         print(f"Screenshot dimensions are implausible: {width}x{height}", file=sys.stderr)
         return 1
 
-    # Ignore Android status/navigation bars and Termux:X11's extra-key rows.
-    # This leaves the actual X11 desktop canvas, including the MATE panels.
-    desktop = image.crop((
-        int(width * 0.01),
-        int(height * 0.08),
-        int(width * 0.99),
-        int(height * 0.86),
-    ))
+    # The CI emulator is portrait and shows Android status/navigation rows and
+    # Termux extra keys outside the X11 canvas. The desktop itself occupies the
+    # centre band. A landscape X11 capture is already almost entirely desktop.
+    if height > width:
+        desktop = image.crop((
+            0,
+            int(height * 0.035),
+            width,
+            int(height * 0.68),
+        ))
+    else:
+        desktop = image
+
+    desktop_width, desktop_height = desktop.size
     pixels = list(desktop.getdata())
     total = len(pixels)
     visible = sum(1 for r, g, b in pixels if max(r, g, b) > 24)
@@ -42,24 +53,36 @@ def main() -> int:
     visible_ratio = visible / total
     chromatic_ratio = chromatic / total
 
+    # Mutiny uses Plank as a persistent vertical dock. The strip is deliberately
+    # wider than the dock so the check remains robust at different resolutions.
+    dock_strip = desktop.crop((0, 0, max(1, int(desktop_width * 0.08)), desktop_height))
+    left_dock_ratio = ratio(dock_strip, lambda rgb: max(rgb) < 80)
+
     print(
-        "MATE desktop screenshot: "
+        "MATE Mutiny screenshot: "
         f"{width}x{height}, "
         f"non-dark={visible_ratio:.1%}, "
-        f"colourful={chromatic_ratio:.1%}"
+        f"colourful={chromatic_ratio:.1%}, "
+        f"left-dock-dark={left_dock_ratio:.1%}"
     )
 
-    # The default Ubuntu MATE wallpaper is green and covers most of the
-    # desktop. A black X11 canvas with only panels/cursor must fail this test.
     if visible_ratio < 0.20 or chromatic_ratio < 0.10:
         print(
             "FAIL: desktop canvas is mostly blank/black; Caja has not rendered "
-            "the MATE desktop wallpaper.",
+            "the Ubuntu MATE wallpaper.",
             file=sys.stderr,
         )
         return 1
 
-    print("PASS: MATE desktop canvas contains rendered wallpaper/UI pixels.")
+    if left_dock_ratio < 0.20:
+        print(
+            "FAIL: Mutiny's vertical Plank dock is not visibly rendered along "
+            "the left edge of the desktop.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print("PASS: the screenshot contains the wallpaper and a visible left-side Mutiny dock.")
     return 0
 
 
