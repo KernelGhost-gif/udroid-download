@@ -229,6 +229,7 @@ do_unmount() { :; }
                 ),
                 "rm": "#!/bin/sh\nexit 0\n",
                 "gsettings": "#!/bin/sh\necho \"'familiar'\"\n",
+                "dconf": "#!/bin/sh\nexit 0\n",
                 "pgrep": "#!/bin/sh\nexit 0\n",
                 "caja": (
                     "#!/bin/sh\n"
