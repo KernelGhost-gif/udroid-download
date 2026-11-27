@@ -25,7 +25,7 @@ collect_diagnostics() {
   adb shell run-as com.termux /system/bin/ls -l "$TERMUX_PREFIX/bin/bash" \
     > "$OUT_DIR/termux-bash-file.txt" 2>&1
   : > "$OUT_DIR/termux-runtime-logs.txt"
-  for f in mate-session.log caja-desktop.log mate-panel-dconf.txt termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt termux-main-InRelease; do
+  for f in mate-session.log caja-desktop.log mate-desktop-state.txt plank.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt termux-main-InRelease; do
     echo "===== $f =====" >> "$OUT_DIR/termux-runtime-logs.txt"
     adb shell run-as com.termux /system/bin/cat "$TERMUX_HOME/$f" \
       >> "$OUT_DIR/termux-runtime-logs.txt" 2>&1 || true
@@ -241,17 +241,22 @@ mkdir -p "$ROOTFS"
 run_phase "Extract Noble MATE rootfs" 600 tar -xzf "$ARCHIVE" -C "$ROOTFS"
 test -x "$ROOTFS/usr/bin/mate-session"
 test -x "$ROOTFS/usr/bin/mate-panel"
+test -x "$ROOTFS/usr/bin/marco"
 test -x "$ROOTFS/usr/bin/caja"
-test -s "$ROOTFS/usr/share/backgrounds/ubuntu-mate-common/Green-Wall-Logo.png"
-test -s "$ROOTFS/usr/share/mate-panel/layouts/familiar.layout"
+test -x "$ROOTFS/usr/bin/plank"
+test -x "$ROOTFS/usr/bin/mate-tweak"
+test -s "$ROOTFS/usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png"
+test -s "$ROOTFS/usr/share/mate-panel/layouts/mutiny.layout"
+test -s "$ROOTFS/usr/share/mate-panel/layouts/mutiny.dock"
+test -s "$ROOTFS/usr/share/plank/themes/Mutiny-dark/dock.theme"
 test -s "$ROOTFS/usr/share/applications/udroid-web-browser.desktop"
+test -s "$ROOTFS/root/.config/plank/dock1/launchers/firefox_firefox.dockitem"
 if grep -Fq '/var/lib/snapd/desktop/applications/firefox_firefox.desktop' \
-    "$ROOTFS/usr/share/mate-panel/layouts/familiar.layout"; then
-  log "The Familiar panel still points to Firefox's unavailable Snap launcher"
+    "$ROOTFS/root/.config/plank/dock1/launchers/firefox_firefox.dockitem"; then
+  log "The Mutiny dock still points to Firefox's unavailable Snap launcher"
   exit 27
 fi
-test -s "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
-grep -Fq "default-layout='familiar'" "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
+grep -Fq "default-layout='mutiny'" "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
 test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
 
 # termux-exec rewrites absolute executable paths for Android; that behavior
@@ -260,7 +265,8 @@ test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
 unset LD_PRELOAD
 for service in \
   org.mate.panel.applet.IndicatorAppletCompleteFactory.service \
-  org.mate.panel.applet.BriskMenuFactory.service
+  org.mate.panel.applet.BriskMenuFactory.service \
+  org.mate.panel.applet.NotificationAreaAppletFactory.service
 do
   test -f "$ROOTFS/usr/share/dbus-1/services/$service" || {
     log "Required MATE panel D-Bus factory is missing: $service"
@@ -331,26 +337,31 @@ session_ok=false
 panel_ok=false
 wm_ok=false
 caja_ok=false
+dock_ok=false
 for attempt in $(seq 1 90); do
   pgrep -f '[m]ate-session' >/dev/null 2>&1 && session_ok=true
   pgrep -f '[m]ate-panel' >/dev/null 2>&1 && panel_ok=true
   pgrep -f '[m]arco' >/dev/null 2>&1 && wm_ok=true
   pgrep -x caja >/dev/null 2>&1 && caja_ok=true
-  if [ "$session_ok" = true ] && [ "$panel_ok" = true ] && [ "$wm_ok" = true ] && [ "$caja_ok" = true ]; then
+  pgrep -x plank >/dev/null 2>&1 && dock_ok=true
+  if [ "$session_ok" = true ] && [ "$panel_ok" = true ] && [ "$wm_ok" = true ] && [ "$caja_ok" = true ] && [ "$dock_ok" = true ]; then
     break
   fi
   sleep 2
 done
 
-log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok caja_desktop=$caja_ok"
+log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok caja_desktop=$caja_ok plank_dock=$dock_ok"
 pgrep -af 'mate-session|mate-panel|marco|caja|mate-settings-daemon' > "$HOME/mate-processes.txt" || true
 if [ -s "$TMPDIR/mate-runtime-termux-ci/caja-desktop.log" ]; then
   cp "$TMPDIR/mate-runtime-termux-ci/caja-desktop.log" "$HOME/caja-desktop.log"
 fi
-if [ -s "$TMPDIR/mate-runtime-termux-ci/mate-panel-dconf.txt" ]; then
-  cp "$TMPDIR/mate-runtime-termux-ci/mate-panel-dconf.txt" "$HOME/mate-panel-dconf.txt"
+if [ -s "$TMPDIR/mate-runtime-termux-ci/mate-desktop-state.txt" ]; then
+  cp "$TMPDIR/mate-runtime-termux-ci/mate-desktop-state.txt" "$HOME/mate-desktop-state.txt"
 fi
-if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ]; then
+if [ -s "$TMPDIR/mate-runtime-termux-ci/plank.log" ]; then
+  cp "$TMPDIR/mate-runtime-termux-ci/plank.log" "$HOME/plank.log"
+fi
+if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] || [ "$caja_ok" != true ] || [ "$dock_ok" != true ]; then
   cat "$HOME/mate-session.log" >&2 || true
   cat "$HOME/termux-x11.log" >&2 || true
   exit 21
@@ -365,6 +376,9 @@ for package in \
   ubuntu-mate-wallpapers-common \
   mate-indicator-applet \
   mate-applet-brisk-menu \
+  plank \
+  mate-tweak \
+  ubuntu-mate-wallpapers-hirsute \
   ayatana-indicator-application \
   ayatana-indicator-datetime \
   ayatana-indicator-messages \
@@ -389,45 +403,32 @@ do
   fi
 done
 
-# Do not accept the generic/minimal MATE fallback. The launcher must have read
-# the familiar two-panel layout from the Ubuntu MATE GSettings defaults.
-if ! grep -Fq "Ubuntu MATE panel layout: 'familiar'" "$HOME/mate-session.log"; then
-  log "The Ubuntu MATE familiar two-panel layout was not selected"
+# Verify the actual Mutiny + Plank session, not just a desktop process list.
+if ! grep -Fq "Ubuntu MATE panel layout: 'mutiny'" "$HOME/mate-session.log"; then
+  log "The Ubuntu MATE Mutiny panel layout was not selected"
   cat "$HOME/mate-session.log" >&2 || true
   exit 29
 fi
-
-# Check the panel state that MATE actually instantiated, not only the
-# selected layout name. Familiar must create both panels and the expected
-# Brisk Menu, notification/indicator area, Wncklet controls, and Trash applet.
-panel_state="$HOME/mate-panel-dconf.txt"
-if [ ! -s "$panel_state" ]; then
-  log "MATE did not produce a runtime panel configuration dump"
+desktop_state="$HOME/mate-desktop-state.txt"
+if [ ! -s "$desktop_state" ]; then
+  log "MATE did not produce its live Mutiny/Plank desktop state"
+  cat "$HOME/mate-session.log" >&2 || true
   exit 30
 fi
-if ! grep -Eq "^toplevel-id-list=.*'top'.*'bottom'" "$panel_state"; then
-  log "The live MATE panel state does not contain both Familiar panels"
-  cat "$panel_state" >&2
-  exit 31
-fi
-for applet in \
-  'BriskMenuFactory::BriskMenu' \
-  'NotificationAreaAppletFactory::NotificationArea' \
-  'IndicatorAppletCompleteFactory::IndicatorAppletComplete' \
-  'WnckletFactory::ShowDesktopApplet' \
-  'WnckletFactory::WindowListApplet' \
-  'WnckletFactory::WorkspaceSwitcherApplet' \
-  'TrashAppletFactory::TrashApplet'
-do
-  if ! grep -Fq "applet-iid='$applet'" "$panel_state"; then
-    log "The live Familiar layout is missing applet $applet"
-    cat "$panel_state" >&2
-    exit 32
+for expected in "mutiny" "plank" "left" "Yaru-MATE-dark" "Hirsute-Hippo_WP_2560x1440_Grey.png"; do
+  if ! grep -Fq "$expected" "$desktop_state"; then
+    log "The live desktop state is missing expected Mutiny setting: $expected"
+    cat "$desktop_state" >&2
+    exit 31
   fi
 done
+if ! grep -Fq "Plank dock position:" "$HOME/mate-session.log"; then
+  log "The launcher did not verify the Plank left-side dock position"
+  exit 32
+fi
 
-# Verify that MATE D-Bus activated its panel applet factories.
-for factory in IndicatorAppletCompleteFactory BriskMenuFactory; do
+# Verify that MATE D-Bus activated the top-panel applet factories.
+for factory in IndicatorAppletCompleteFactory BriskMenuFactory NotificationAreaAppletFactory; do
   if ! grep -Fq "Successfully activated service 'org.mate.panel.applet.$factory'" "$HOME/mate-session.log"; then
     log "MATE panel did not successfully activate $factory"
     grep -E "org.mate.panel.applet.$factory|BriskMenu|IndicatorApplet" "$HOME/mate-session.log" >&2 || true
