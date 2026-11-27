@@ -26,6 +26,25 @@ apt-get install -y --no-install-recommends \
     mate-applets \
     mate-indicator-applet \
     mate-applet-brisk-menu \
+    ayatana-indicator-application \
+    ayatana-indicator-datetime \
+    ayatana-indicator-messages \
+    ayatana-indicator-notifications \
+    ayatana-indicator-power \
+    ayatana-indicator-printers \
+    ayatana-indicator-session \
+    ayatana-indicator-sound \
+    atril \
+    engrampa \
+    eom \
+    epiphany-browser \
+    ffmpegthumbnailer \
+    gnome-keyring \
+    mate-calc \
+    mate-media \
+    mate-notification-daemon \
+    mate-system-monitor \
+    pluma \
     ubuntu-mate-desktop \
     mate-utils \
     mesa-utils \
@@ -40,6 +59,31 @@ apt-get install -y --no-install-recommends \
     xdg-user-dirs \
     xterm \
     tigervnc-xorg-extension
+
+
+# The upstream Familiar layout points to Firefox's Snap desktop file. Snap
+# services are unavailable in Termux PRoot, so provide a regular package
+# browser launcher and redirect only that launcher entry.
+install -d /usr/share/applications
+cat > /usr/share/applications/udroid-web-browser.desktop <<'EOF_BROWSER'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Web Browser
+Comment=Browse the web
+Exec=epiphany %U
+Icon=web-browser
+Terminal=false
+Categories=Network;WebBrowser;
+StartupNotify=true
+EOF_BROWSER
+
+familiar_layout=/usr/share/mate-panel/layouts/familiar.layout
+if [ -f "$familiar_layout" ]; then
+    sed -i \
+        's#/var/lib/snapd/desktop/applications/firefox_firefox.desktop#/usr/share/applications/udroid-web-browser.desktop#g' \
+        "$familiar_layout"
+fi
 
 # Use a predictable locale in graphical applications.
 if [ -f /etc/locale.gen ]; then
@@ -74,6 +118,21 @@ filemanager='caja'
 
 [org/mate/panel]
 default-layout='familiar'
+
+# Apply the same Ubuntu MATE theme family and desktop defaults used by
+# a normal installation. System defaults avoid interactive first-login setup.
+[org/mate/interface]
+gtk-theme='Yaru-MATE-light'
+icon-theme='Yaru-MATE-light'
+
+[org/mate/Marco/general]
+theme='Yaru-MATE-light'
+
+[org/mate/caja/desktop]
+computer-icon-visible=true
+home-icon-visible=true
+trash-icon-visible=true
+volumes-visible=true
 
 # Root sessions do not reliably launch Caja as the desktop manager. The
 # launcher starts Caja explicitly; these values provide its desktop backdrop.
