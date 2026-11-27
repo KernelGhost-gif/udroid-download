@@ -104,7 +104,7 @@ command -v dconf >/dev/null 2>&1 || {
 gsettings set org.mate.session required-components-list "[\"windowmanager\", \"panel\", \"filemanager\", \"dock\"]"
 gsettings set org.mate.session.required-components dock "plank"
 gsettings set org.mate.panel default-layout "mutiny"
-# Match the Mutiny profile's Brisk Menu dash style.
+# Match the Mutiny Brisk Menu dash style.
 gsettings set com.solus-project.brisk-menu window-type "dash"
 gsettings set com.solus-project.brisk-menu label-visible true
 gsettings set org.mate.interface gtk-theme "Yaru-MATE-dark"
