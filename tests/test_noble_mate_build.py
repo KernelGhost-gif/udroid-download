@@ -162,6 +162,8 @@ do_unmount() { :; }
         self.assertIn("dbus-run-session -- bash -c", fixes)
         self.assertIn('mate-session "$@" &', fixes)
         self.assertIn("caja --no-default-window --force-desktop", fixes)
+        self.assertIn("gsettings get org.mate.panel default-layout", fixes)
+        self.assertIn("Ubuntu MATE panel layout:", fixes)
         self.assertIn("UDROID_MATE_RUNTIME_DIR", fixes)
         self.assertEqual(fixes.count("XKB_CONFIG_ROOT=/usr/share/X11/xkb"), 2)
         self.assertIn("WINDOW_MANAGER=/usr/bin/marco", fixes)
