@@ -104,6 +104,9 @@ command -v dconf >/dev/null 2>&1 || {
 gsettings set org.mate.session required-components-list "[\"windowmanager\", \"panel\", \"filemanager\", \"dock\"]"
 gsettings set org.mate.session.required-components dock "plank"
 gsettings set org.mate.panel default-layout "mutiny"
+# Match the Mutiny profile's Brisk Menu dash style.
+gsettings set com.solus-project.brisk-menu window-type "dash"
+gsettings set com.solus-project.brisk-menu label-visible true
 gsettings set org.mate.interface gtk-theme "Yaru-MATE-dark"
 gsettings set org.mate.interface icon-theme "Yaru-MATE-dark"
 gsettings set org.mate.Marco.general theme "Yaru-MATE-dark"
@@ -192,10 +195,11 @@ fi
 panel_layout="$(gsettings get org.mate.panel default-layout)"
 dock_component="$(gsettings get org.mate.session.required-components dock)"
 dock_position="$(dconf read /net/launchpad/plank/docks/dock1/position)"
+brisk_menu_type="$(gsettings get com.solus-project.brisk-menu window-type)"
 gtk_theme="$(gsettings get org.mate.interface gtk-theme)"
 icon_theme="$(gsettings get org.mate.interface icon-theme)"
 background="$(gsettings get org.mate.background picture-filename)"
-if [[ "$panel_layout" != *mutiny* || "$dock_component" != *plank* || "$dock_position" != *left* ]]; then
+if [[ "$panel_layout" != *mutiny* || "$dock_component" != *plank* || "$dock_position" != *left* || "$brisk_menu_type" != *dash* ]]; then
     printf "[udroid-mate] ERROR: live desktop settings are not Mutiny/Plank-left (layout=%s dock=%s position=%s)\n" "$panel_layout" "$dock_component" "$dock_position" >&2
     exit 1
 fi
@@ -203,6 +207,7 @@ fi
     printf "layout=%s\n" "$panel_layout"
     printf "dock_component=%s\n" "$dock_component"
     printf "dock_position=%s\n" "$dock_position"
+    printf "brisk_menu_type=%s\n" "$brisk_menu_type"
     printf "gtk_theme=%s\n" "$gtk_theme"
     printf "icon_theme=%s\n" "$icon_theme"
     printf "background=%s\n" "$background"
