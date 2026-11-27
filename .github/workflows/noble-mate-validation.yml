@@ -75,7 +75,13 @@ jobs:
             usr/bin/mate-session \
             usr/bin/mate-panel \
             usr/bin/marco \
+            usr/bin/plank \
+            usr/bin/mate-tweak \
             usr/local/bin/udroid-mate-x11 \
+            usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png \
+            usr/share/mate-panel/layouts/mutiny.layout \
+            usr/share/mate-panel/layouts/mutiny.dock \
+            usr/share/plank/themes/Mutiny-dark/dock.theme \
             usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service \
             usr/share/dbus-1/services/org.mate.panel.applet.BriskMenuFactory.service \
             usr/share/X11/xkb
@@ -96,7 +102,7 @@ jobs:
           grep -Eq '^ID="?ubuntu"?$' "$RUNNER_TEMP/os-release"
           grep -Eq '^VERSION_CODENAME="?noble"?$' "$RUNNER_TEMP/os-release"
 
-          for package in mate-session-manager mate-panel marco caja mate-indicator-applet mate-applet-brisk-menu; do
+          for package in mate-session-manager mate-panel marco caja mate-indicator-applet mate-applet-brisk-menu plank mate-tweak; do
             awk -v package="$package" '
               BEGIN { RS=""; FS="\n" }
               {
