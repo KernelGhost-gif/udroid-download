@@ -70,7 +70,7 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
     def test_screenshot_is_checked_for_a_rendered_desktop_not_a_black_canvas(self):
         checker = ROOT / ".github/scripts/check-mate-screenshot.py"
         self.assertTrue(checker.is_file())
-        self.assertIn('python3 "$GITHUB_WORKSPACE/.github/scripts/check-mate-screenshot.py"', self.content)
+        self.assertIn('/usr/bin/python3 "$GITHUB_WORKSPACE/.github/scripts/check-mate-screenshot.py"', self.content)
         self.assertIn("chromatic_ratio < 0.10", checker.read_text())
 
 
