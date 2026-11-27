@@ -26,6 +26,8 @@ apt-get install -y --no-install-recommends \
     mate-applets \
     mate-indicator-applet \
     mate-applet-brisk-menu \
+    mate-tweak \
+    plank \
     ayatana-indicator-application \
     ayatana-indicator-datetime \
     ayatana-indicator-messages \
@@ -53,6 +55,7 @@ apt-get install -y --no-install-recommends \
     ubuntu-mate-icon-themes \
     ubuntu-mate-themes \
     ubuntu-mate-wallpapers-common \
+    ubuntu-mate-wallpapers-hirsute \
     x11-utils \
     x11-xserver-utils \
     xauth \
@@ -61,9 +64,8 @@ apt-get install -y --no-install-recommends \
     tigervnc-xorg-extension
 
 
-# The upstream Familiar layout points to Firefox's Snap desktop file. Snap
-# services are unavailable in Termux PRoot, so provide a regular package
-# browser launcher and redirect only that launcher entry.
+# Mutiny's upstream Plank profile includes a Firefox Snap launcher.
+# Snap services do not run in Termux PRoot, so use a normal Ubuntu browser.
 install -d /usr/share/applications
 cat > /usr/share/applications/udroid-web-browser.desktop <<'EOF_BROWSER'
 [Desktop Entry]
@@ -78,11 +80,18 @@ Categories=Network;WebBrowser;
 StartupNotify=true
 EOF_BROWSER
 
-familiar_layout=/usr/share/mate-panel/layouts/familiar.layout
-if [ -f "$familiar_layout" ]; then
-    sed -i \
-        's#/var/lib/snapd/desktop/applications/firefox_firefox.desktop#/usr/share/applications/udroid-web-browser.desktop#g' \
-        "$familiar_layout"
+# Seed the same Plank launchers supplied by Ubuntu MATE. Replace only the
+# Snap browser entry; the rest of the Mutiny dock remains the upstream set.
+plank_launchers=/usr/share/ubuntu-mate/settings-overlay/config/plank/dock1/launchers
+if [ -d "$plank_launchers" ]; then
+    install -d /root/.config/plank/dock1/launchers
+    cp -a "$plank_launchers/." /root/.config/plank/dock1/launchers/
+    firefox_launcher=/root/.config/plank/dock1/launchers/firefox_firefox.dockitem
+    if [ -f "$firefox_launcher" ]; then
+        sed -i \
+            's#file:///var/lib/snapd/desktop/applications/firefox_firefox.desktop#file:///usr/share/applications/udroid-web-browser.desktop#g' \
+            "$firefox_launcher"
+    fi
 fi
 
 # Use a predictable locale in graphical applications.
@@ -109,35 +118,35 @@ EOF_DCONF
 # required MATE components explicit so PRoot does not depend on session defaults.
 cat > /etc/dconf/db/local.d/00-udroid-mate-session <<'EOF_SESSION_DCONF'
 [org/mate/desktop/session]
-required-components-list=['windowmanager', 'panel', 'filemanager']
+required-components-list=['windowmanager', 'panel', 'filemanager', 'dock']
 
 [org/mate/desktop/session/required-components]
 windowmanager='marco'
 panel='mate-panel'
 filemanager='caja'
+dock='plank'
 
 [org/mate/panel]
-default-layout='familiar'
+default-layout='mutiny'
 
-# Apply the same Ubuntu MATE theme family and desktop defaults used by
-# a normal installation. System defaults avoid interactive first-login setup.
+# Match the dark Ubuntu MATE 21.04 Mutiny appearance in the reference desktop.
 [org/mate/interface]
-gtk-theme='Yaru-MATE-light'
-icon-theme='Yaru-MATE-light'
+gtk-theme='Yaru-MATE-dark'
+icon-theme='Yaru-MATE-dark'
 
 [org/mate/Marco/general]
-theme='Yaru-MATE-light'
+theme='Yaru-MATE-dark'
+compositing-manager=true
 
+# Keep the desktop clear; the launchers live in the left-side Plank dock.
 [org/mate/caja/desktop]
-computer-icon-visible=true
-home-icon-visible=true
-trash-icon-visible=true
-volumes-visible=true
+computer-icon-visible=false
+home-icon-visible=false
+trash-icon-visible=false
+volumes-visible=false
 
-# Root sessions do not reliably launch Caja as the desktop manager. The
-# launcher starts Caja explicitly; these values provide its desktop backdrop.
 [org/mate/desktop/background]
-picture-filename='/usr/share/backgrounds/ubuntu-mate-common/Green-Wall-Logo.png'
+picture-filename='/usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png'
 picture-options='zoom'
 EOF_SESSION_DCONF
 
