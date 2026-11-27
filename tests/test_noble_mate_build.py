@@ -204,8 +204,8 @@ do_unmount() { :; }
         self.assertIn("dconf write /net/launchpad/plank/docks/dock1/position", fixes)
         self.assertIn("mate-desktop-state.txt", fixes)
         launcher_body = fixes.split(
-            "exec dbus-run-session -- bash -c '\\n", 1
-        )[1].split("\\n' udroid-mate-session", 1)[0]
+            "exec dbus-run-session -- bash -c '\n", 1
+        )[1].split("\n' udroid-mate-session", 1)[0]
         self.assertNotIn("'", launcher_body)
         self.assertIn("Ubuntu MATE panel layout:", fixes)
         self.assertIn("UDROID_MATE_RUNTIME_DIR", fixes)
