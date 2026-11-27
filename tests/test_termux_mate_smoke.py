@@ -159,6 +159,39 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn("Successfully activated service 'org.mate.panel.applet.$factory'", self.content)
         self.assertIn("for factory in IndicatorAppletCompleteFactory BriskMenuFactory", self.content)
 
+    def test_smoke_verifies_the_actual_familiar_panel_objects(self):
+        for expected in (
+            "mate-panel-dconf.txt",
+            "dconf dump /org/mate/panel/",
+            "toplevel-id-list=.*'top'.*'bottom'",
+            "BriskMenuFactory::BriskMenu",
+            "NotificationAreaAppletFactory::NotificationArea",
+            "IndicatorAppletCompleteFactory::IndicatorAppletComplete",
+            "WnckletFactory::ShowDesktopApplet",
+            "WnckletFactory::WindowListApplet",
+            "WnckletFactory::WorkspaceSwitcherApplet",
+            "TrashAppletFactory::TrashApplet",
+        ):
+            self.assertIn(expected, self.content)
+
+    def test_smoke_rejects_the_unavailable_firefox_snap_launcher(self):
+        self.assertIn("udroid-web-browser.desktop", self.content)
+        self.assertIn("firefox_firefox.desktop", self.content)
+        self.assertIn("epiphany-browser", self.content)
+
+    def test_smoke_requires_installed_ayatana_indicator_backends(self):
+        for package in (
+            "ayatana-indicator-application",
+            "ayatana-indicator-datetime",
+            "ayatana-indicator-messages",
+            "ayatana-indicator-notifications",
+            "ayatana-indicator-power",
+            "ayatana-indicator-printers",
+            "ayatana-indicator-session",
+            "ayatana-indicator-sound",
+        ):
+            self.assertIn(package, self.content)
+
     def test_emulator_smoke_rejects_android_anr_dialogs(self):
         self.assertIn("Application Not Responding:", self.content)
         self.assertIn("android-window-before-recovery.txt", self.content)
