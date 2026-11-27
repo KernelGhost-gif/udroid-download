@@ -8,9 +8,10 @@ An ( fs-cook & debootstrap ) wrapper to build udroid with cmdline.
 
 The `noble/mateRaw` target builds a full Ubuntu 24.04 MATE desktop
 root filesystem for Termux:X11. It supports ARM64 and AMD64 builds and
-includes the Ubuntu MATE Familiar two-panel layout, Ayatana status indicators,
-Yaru-MATE theme defaults, desktop utilities, and a PRoot-compatible browser
-launcher. It does not start LightDM or an in-container Xorg server.
+includes the Ubuntu MATE Mutiny layout with its top panel and left-side Plank
+dock, Ayatana status indicators, Yaru-MATE dark theme, Hirsute Hippo wallpaper,
+desktop utilities, and a PRoot-compatible browser launcher. It does not start
+LightDM or an in-container Xorg server.
 
 Build an ARM64 image with:
 
@@ -30,10 +31,11 @@ The launcher checks the X11 connection, starts the system D-Bus only when
 needed, creates a private PRoot-compatible runtime directory, and starts MATE
 with a fresh session D-Bus. The unavailable systemd-logind activation file is
 kept outside the active D-Bus service directory because PRoot does not run
-systemd or logind. The Familiar layout's Firefox Snap shortcut is redirected
-to Epiphany, which is installed as a regular Ubuntu package. CI checks the
-instantiated two-panel configuration and its applets, in addition to the
-desktop processes and screenshot. The CI matrix opts this target into ARM64
+systemd or logind. The Mutiny dock's Firefox Snap shortcut is redirected to Epiphany, which is
+installed as a regular Ubuntu package. The launcher sets the session's dock
+component to Plank and applies the upstream Mutiny dock position and theme.
+CI checks the live Plank position, required dock component, applet factories,
+and screenshot for a visible left-side dock. The CI matrix opts this target into ARM64
 and AMD64 without changing the default architectures used by other variants.
 
 ## Ubuntu Plucky GNOME X11 image
