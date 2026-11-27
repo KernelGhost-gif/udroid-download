@@ -138,6 +138,11 @@ icon-theme='Yaru-MATE-dark'
 theme='Yaru-MATE-dark'
 compositing-manager=true
 
+# Mutiny uses Brisk Menu's dash presentation and retains its visible Menu label.
+[com/solus-project/brisk-menu]
+window-type='dash'
+label-visible=true
+
 # Keep the desktop clear; the launchers live in the left-side Plank dock.
 [org/mate/caja/desktop]
 computer-icon-visible=false
