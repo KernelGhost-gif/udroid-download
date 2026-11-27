@@ -140,16 +140,41 @@ do_unmount() { :; }
             {"suite": "noble", "variant": "mateRaw", "architecture": "amd64"},
         ])
 
-    def test_setup_is_lightweight_and_uses_noble_mate_packages(self):
+    def test_setup_installs_the_full_mate_desktop_and_indicator_stack(self):
         setup = (VARIANT / "mateRaw-setup.sh").read_text()
         self.assertIn("ubuntu-mate-desktop", setup)
         self.assertIn("ubuntu-mate-themes", setup)
         self.assertIn("tigervnc-xorg-extension", setup)
         self.assertIn("mate-indicator-applet", setup)
         self.assertIn("mate-applet-brisk-menu", setup)
+        for package in (
+            "ayatana-indicator-application",
+            "ayatana-indicator-datetime",
+            "ayatana-indicator-messages",
+            "ayatana-indicator-notifications",
+            "ayatana-indicator-power",
+            "ayatana-indicator-printers",
+            "ayatana-indicator-session",
+            "ayatana-indicator-sound",
+            "atril",
+            "engrampa",
+            "eom",
+            "epiphany-browser",
+            "gnome-keyring",
+            "mate-calc",
+            "mate-media",
+            "mate-notification-daemon",
+            "mate-system-monitor",
+            "pluma",
+        ):
+            self.assertIn(package, setup)
         self.assertIn("ubuntu-mate-default-settings", setup)
         self.assertIn("ubuntu-mate-icon-themes", setup)
         self.assertIn("gvfs-backends", setup)
+        self.assertIn("udroid-web-browser.desktop", setup)
+        self.assertIn("epiphany %U", setup)
+        self.assertIn("Yaru-MATE-light", setup)
+        self.assertIn("computer-icon-visible=true", setup)
         self.assertNotIn("mate-desktop-environment-core", setup)
         self.assertNotIn("lightdm", setup)
         self.assertNotIn("\n    xorg", setup)
