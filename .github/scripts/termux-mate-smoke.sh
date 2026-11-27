@@ -242,7 +242,10 @@ run_phase "Extract Noble MATE rootfs" 600 tar -xzf "$ARCHIVE" -C "$ROOTFS"
 test -x "$ROOTFS/usr/bin/mate-session"
 test -x "$ROOTFS/usr/bin/mate-panel"
 test -x "$ROOTFS/usr/bin/caja"
-test -s "$ROOTFS/usr/share/backgrounds/ubuntu-mate-common/Green-Wall.png"
+test -s "$ROOTFS/usr/share/backgrounds/ubuntu-mate-common/Green-Wall-Logo.png"
+test -s "$ROOTFS/usr/share/mate-panel/layouts/familiar.layout"
+test -s "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
+grep -Fq "default-layout='familiar'" "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
 test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
 
 # termux-exec rewrites absolute executable paths for Android; that behavior
@@ -345,8 +348,15 @@ if [ "$session_ok" != true ] || [ "$panel_ok" != true ] || [ "$wm_ok" != true ] 
 fi
 
 sleep 12
-# Verify each configured panel applet package is installed.
-for package in mate-indicator-applet mate-applet-brisk-menu; do
+# Verify the full Jammy-equivalent Ubuntu MATE package set is installed.
+for package in \
+  ubuntu-mate-desktop \
+  ubuntu-mate-themes \
+  ubuntu-mate-icon-themes \
+  ubuntu-mate-wallpapers-common \
+  mate-indicator-applet \
+  mate-applet-brisk-menu
+do
   run_phase "Verify configured MATE panel package: $package" 30 \
     "$PREFIX/bin/proot" --link2symlink -0 -r "$ROOTFS" \
       /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin \
@@ -359,6 +369,14 @@ for package in mate-indicator-applet mate-applet-brisk-menu; do
     exit 24
   fi
 done
+
+# Do not accept the generic/minimal MATE fallback. The launcher must have read
+# the familiar two-panel layout from the Ubuntu MATE GSettings defaults.
+if ! grep -Fq "Ubuntu MATE panel layout: 'familiar'" "$HOME/mate-session.log"; then
+  log "The Ubuntu MATE familiar two-panel layout was not selected"
+  cat "$HOME/mate-session.log" >&2 || true
+  exit 29
+fi
 
 # Verify the panel activated both configured applet factories; the desktop
 # process check alone would miss a panel dialog caused by a missing factory.
