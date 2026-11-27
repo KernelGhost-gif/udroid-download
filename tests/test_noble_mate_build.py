@@ -242,6 +242,7 @@ do_unmount() { :; }
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(state.exists(), "system D-Bus was not started")
             self.assertEqual(started.read_text().strip(), ":0|MATE|x11")
+            self.assertIn("Ubuntu MATE panel layout: 'familiar'", result.stdout)
             self.assertTrue(caja_started.exists(), "Caja desktop was not launched")
             self.assertEqual(caja_started.read_text().strip(), "--no-default-window --force-desktop")
             self.assertTrue(runtime.is_dir())
