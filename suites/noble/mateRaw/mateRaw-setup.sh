@@ -197,7 +197,7 @@ EOF_DCONF
 # required MATE components explicit so PRoot does not depend on session defaults.
 cat > /etc/dconf/db/local.d/00-udroid-mate-session <<'EOF_SESSION_DCONF'
 [org/mate/desktop/session]
-required-components-list=['windowmanager', 'panel', 'filemanager', 'dock']
+required-components-list=['panel']
 
 [org/mate/desktop/session/required-components]
 windowmanager='marco'
