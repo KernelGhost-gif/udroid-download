@@ -121,12 +121,12 @@ gsettings set org.mate.background picture-filename "/usr/share/backgrounds/ubunt
 gsettings set org.mate.background picture-options "zoom"
 
 # These are the same values mate-tweak applies when selecting the Mutiny dock.
-dconf write /net/launchpad/plank/docks/dock1/alignment "\\"fill\\""
-dconf write /net/launchpad/plank/docks/dock1/hide-mode "\\"none\\""
+dconf write /net/launchpad/plank/docks/dock1/alignment "\"fill\""
+dconf write /net/launchpad/plank/docks/dock1/hide-mode "\"none\""
 dconf write /net/launchpad/plank/docks/dock1/icon-size 56
-dconf write /net/launchpad/plank/docks/dock1/items-alignment "\\"start\\""
-dconf write /net/launchpad/plank/docks/dock1/position "\\"left\\""
-dconf write /net/launchpad/plank/docks/dock1/theme "\\"Mutiny-dark\\""
+dconf write /net/launchpad/plank/docks/dock1/items-alignment "\"start\""
+dconf write /net/launchpad/plank/docks/dock1/position "\"left\""
+dconf write /net/launchpad/plank/docks/dock1/theme "\"Mutiny-dark\""
 dconf write /net/launchpad/plank/docks/dock1/zoom-enabled false
 
 panel_layout="$(gsettings get org.mate.panel default-layout)"
@@ -178,8 +178,8 @@ desktop_pid=$!
 # Android integration test independently checks the real process table.
 sleep 5
 for entry in "Marco:$wm_pid" "MATE-session:$session_pid" "Plank:$dock_pid" "Caja:$desktop_pid"; do
-    label="\${entry%%:*}"
-    pid="\${entry#*:}"
+    label="${entry%%:*}"
+    pid="${entry#*:}"
     if ! kill -0 "$pid" 2>/dev/null; then
         printf "[udroid-mate] ERROR: %s exited during startup (pid %s)\n" "$label" "$pid" >&2
         cat "$XDG_RUNTIME_DIR/marco.log" "$XDG_RUNTIME_DIR/plank.log" "$XDG_RUNTIME_DIR/caja-desktop.log" >&2 || true
