@@ -251,7 +251,7 @@ do_unmount() { :; }
         self.assertIn("default-layout='mutiny'", setup)
         self.assertIn("dock='plank'", setup)
         self.assertIn("picture-filename='/usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png'", setup)
-        self.assertIn("required-components-list=['windowmanager', 'panel', 'filemanager', 'dock']", setup)
+        self.assertIn("required-components-list=['panel']", setup)
         self.assertNotIn("[org/mate/session]", setup)
         self.assertNotIn("dock=''", setup)
 
@@ -289,18 +289,18 @@ do_unmount() { :; }
                     "if [ \"$1\" = read ] && [ \"$2\" = /net/launchpad/plank/docks/dock1/position ]; then echo \"'left'\"; fi\n"
                     "exit 0\n"
                 ),
-                "plank": "#!/bin/sh\nexit 0\n",
-                "pgrep": "#!/bin/sh\nexit 0\n",
+                "plank": "#!/bin/sh\nsleep 12\n",
+                "pgrep": "#!/bin/sh\nexit 0\n",\n                "marco": "#!/bin/sh\nsleep 12\n",
                 "caja": (
                     "#!/bin/sh\n"
                     f"printf '%s\\n' \"$*\" > '{caja_started}'\n"
-                    "sleep 5\n"
+                    "sleep 12\n"
                 ),
                 "dbus-run-session": "#!/bin/sh\n[ \"$1\" = -- ] && shift\nexec \"$@\"\n",
                 "mate-session": (
                     "#!/bin/sh\n"
                     f"printf '%s\\n' \"$DISPLAY|$XDG_CURRENT_DESKTOP|$XDG_SESSION_TYPE\" > '{started}'\n"
-                    "sleep 2\n"
+                    "sleep 12\n"
                 ),
             }
             for name, script in scripts.items():
