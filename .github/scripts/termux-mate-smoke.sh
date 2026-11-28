@@ -25,7 +25,7 @@ collect_diagnostics() {
   adb shell run-as com.termux /system/bin/ls -l "$TERMUX_PREFIX/bin/bash" \
     > "$OUT_DIR/termux-bash-file.txt" 2>&1
   : > "$OUT_DIR/termux-runtime-logs.txt"
-  for f in mate-session.log caja-desktop.log mate-desktop-state.txt plank.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt termux-main-InRelease; do
+  for f in mate-session.log caja-desktop.log mate-desktop-state.txt plank.log termux-x11.log termux-x11-activity.log mate-processes.txt x11-sockets.txt marco.log termux-main-InRelease; do
     echo "===== $f =====" >> "$OUT_DIR/termux-runtime-logs.txt"
     adb shell run-as com.termux /system/bin/cat "$TERMUX_HOME/$f" \
       >> "$OUT_DIR/termux-runtime-logs.txt" 2>&1 || true
@@ -368,11 +368,11 @@ wm_ok=false
 caja_ok=false
 dock_ok=false
 for attempt in $(seq 1 90); do
-  pgrep -f '[m]ate-session' >/dev/null 2>&1 && session_ok=true
-  pgrep -f '[m]ate-panel' >/dev/null 2>&1 && panel_ok=true
-  pgrep -f '[m]arco' >/dev/null 2>&1 && wm_ok=true
-  pgrep -x caja >/dev/null 2>&1 && caja_ok=true
-  pgrep -x plank >/dev/null 2>&1 && dock_ok=true
+  if pgrep -x mate-session >/dev/null 2>&1; then session_ok=true; else session_ok=false; fi
+  if pgrep -x mate-panel >/dev/null 2>&1; then panel_ok=true; else panel_ok=false; fi
+  if pgrep -x marco >/dev/null 2>&1; then wm_ok=true; else wm_ok=false; fi
+  if pgrep -x caja >/dev/null 2>&1; then caja_ok=true; else caja_ok=false; fi
+  if pgrep -x plank >/dev/null 2>&1; then dock_ok=true; else dock_ok=false; fi
   if [ "$session_ok" = true ] && [ "$panel_ok" = true ] && [ "$wm_ok" = true ] && [ "$caja_ok" = true ] && [ "$dock_ok" = true ]; then
     break
   fi
@@ -380,7 +380,10 @@ for attempt in $(seq 1 90); do
 done
 
 log "MATE process check: session=$session_ok panel=$panel_ok marco=$wm_ok caja_desktop=$caja_ok plank_dock=$dock_ok"
-pgrep -af 'mate-session|mate-panel|marco|caja|mate-settings-daemon' > "$HOME/mate-processes.txt" || true
+ps -eo pid,comm,args > "$HOME/mate-processes.txt" || true
+if [ -s "$TMPDIR/mate-runtime-termux-ci/marco.log" ]; then
+  cp "$TMPDIR/mate-runtime-termux-ci/marco.log" "$HOME/marco.log"
+fi
 if [ -s "$TMPDIR/mate-runtime-termux-ci/caja-desktop.log" ]; then
   cp "$TMPDIR/mate-runtime-termux-ci/caja-desktop.log" "$HOME/caja-desktop.log"
 fi
@@ -444,7 +447,7 @@ if [ ! -s "$desktop_state" ]; then
   cat "$HOME/mate-session.log" >&2 || true
   exit 30
 fi
-for expected in "mutiny" "plank" "left" "dash" "Yaru-MATE-dark" "Hirsute-Hippo_WP_2560x1440_Grey.png"; do
+for expected in "mutiny" "plank" "left" "dash" "Yaru-MATE-dark" "Hirsute-Hippo_WP_2560x1440_Grey.png" "marco_pid=" "plank_pid=" "caja_pid="; do
   if ! grep -Fq "$expected" "$desktop_state"; then
     log "The live desktop state is missing expected Mutiny setting: $expected"
     cat "$desktop_state" >&2
