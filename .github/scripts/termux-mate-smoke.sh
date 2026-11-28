@@ -267,7 +267,8 @@ for path in \
   usr/share/applications/caja-browser.desktop \
   usr/share/applications/matecc.desktop \
   usr/share/applications/udroid-terminal.desktop \
-  usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override; do
+  usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override \
+  etc/dconf/db/local.d/00-udroid-mate-session; do
   require_file "$ROOTFS/$path"
 done
 for launcher in \
@@ -280,7 +281,12 @@ if grep -Fq '/var/lib/snapd/desktop/applications/firefox_firefox.desktop' \
   log "The Mutiny dock still points to Firefox's unavailable Snap launcher"
   exit 27
 fi
-grep -Fq "default-layout='mutiny'" "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
+MUTINY_DCONF="$ROOTFS/etc/dconf/db/local.d/00-udroid-mate-session"
+if ! grep -Fq "default-layout='mutiny'" "$MUTINY_DCONF"; then
+  log "The PRoot dconf keyfile does not select the Mutiny panel layout"
+  grep -nE '^\\[org/mate/panel\\]|^default-layout=' "$MUTINY_DCONF" >&2 || true
+  exit 42
+fi
 
 # termux-exec rewrites absolute executable paths for Android; that behavior
 # breaks guest executable lookup in PRoot. Clear it before every guest PRoot
