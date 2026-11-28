@@ -74,7 +74,15 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
             "require_file()",
             "usr/share/mate-panel/layouts/mutiny.layout",
             "root/.config/plank/dock1/launchers/",
-            "caja-browser clock desktop firefox_firefox mate-calc",
+            "caja-browser",
+            "clock",
+            "desktop",
+            "firefox_firefox",
+            "mate-calc",
+            "mate-system-monitor",
+            "mate-terminal",
+            "matecc",
+            "trash",
         ):
             self.assertIn(expected, self.content)
 
