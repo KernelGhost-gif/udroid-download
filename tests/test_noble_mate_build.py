@@ -198,7 +198,11 @@ do_unmount() { :; }
             "trash.dockitem",
         ):
             self.assertIn(launcher, setup)
-        self.assertIn("settings-overlay", setup) if False else None
+        self.assertIn("install -d /root/.config/plank/dock1/launchers", setup)
+        self.assertIn("Launcher=file:///usr/share/applications/udroid-web-browser.desktop", setup)
+        self.assertIn("Launcher=docklet://trash", setup)
+        self.assertIn("Exec=mate-control-center", setup)
+        self.assertIn("Exec=mate-terminal", setup)
         self.assertIn("udroid-web-browser.desktop", setup)
         self.assertIn("computer-icon-visible=false", setup)
         self.assertNotIn("mate-desktop-environment-core", setup)
