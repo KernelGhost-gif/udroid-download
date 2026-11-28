@@ -140,6 +140,17 @@ do_unmount() { :; }
             {"suite": "noble", "variant": "mateRaw", "architecture": "amd64"},
         ])
 
+    def test_setup_creates_xdg_config_before_optional_user_dir_update(self):
+        setup = (VARIANT / "mateRaw-setup.sh").read_text()
+        config_dir = setup.index("install -d /root/.config")
+        user_dirs = setup.index("xdg-user-dirs-update")
+        dconf_keyfile = setup.index("cat > /etc/dconf/db/local.d/00-udroid-mate-session")
+        self.assertLess(config_dir, user_dirs)
+        self.assertLess(user_dirs, dconf_keyfile)
+        self.assertIn("XDG_CONFIG_HOME=/root/.config", setup)
+        self.assertIn("if ! HOME=/root XDG_CONFIG_HOME=/root/.config xdg-user-dirs-update; then", setup)
+        self.assertIn("continuing with the pre-created directories", setup)
+
     def test_setup_installs_the_full_mate_desktop_and_indicator_stack(self):
         setup = (VARIANT / "mateRaw-setup.sh").read_text()
         self.assertIn("ubuntu-mate-desktop", setup)
