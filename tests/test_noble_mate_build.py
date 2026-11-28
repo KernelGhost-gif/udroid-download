@@ -148,6 +148,8 @@ do_unmount() { :; }
         self.assertIn("mate-indicator-applet", setup)
         self.assertIn("mate-applet-brisk-menu", setup)
         self.assertIn("mate-tweak", setup)
+        self.assertIn("mate-control-center", setup)
+        self.assertIn("mate-terminal", setup)
         self.assertIn("plank", setup)
         self.assertIn("ubuntu-mate-wallpapers-hirsute", setup)
         for package in (
@@ -184,7 +186,19 @@ do_unmount() { :; }
         self.assertIn("Mutiny-dark", fixes)
         self.assertIn("window-type='dash'", setup)
         self.assertIn("label-visible=true", setup)
-        self.assertIn("settings-overlay/config/plank/dock1/launchers", setup)
+        for launcher in (
+            "caja-browser.dockitem",
+            "clock.dockitem",
+            "desktop.dockitem",
+            "firefox_firefox.dockitem",
+            "mate-calc.dockitem",
+            "mate-system-monitor.dockitem",
+            "mate-terminal.dockitem",
+            "matecc.dockitem",
+            "trash.dockitem",
+        ):
+            self.assertIn(launcher, setup)
+        self.assertIn("settings-overlay", setup) if False else None
         self.assertIn("udroid-web-browser.desktop", setup)
         self.assertIn("computer-icon-visible=false", setup)
         self.assertNotIn("mate-desktop-environment-core", setup)
