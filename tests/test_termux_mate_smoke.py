@@ -68,6 +68,16 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         self.assertIn('pgrep -x plank', self.content)
         self.assertIn('plank_dock=$dock_ok', self.content)
 
+    def test_preflight_reports_missing_mutiny_assets_and_validates_each_launcher(self):
+        for expected in (
+            "require_executable()",
+            "require_file()",
+            "usr/share/mate-panel/layouts/mutiny.layout",
+            "root/.config/plank/dock1/launchers/",
+            "caja-browser clock desktop firefox_firefox mate-calc",
+        ):
+            self.assertIn(expected, self.content)
+
     def test_screenshot_requires_a_visible_left_side_plank_dock(self):
         checker = ROOT / ".github/scripts/check-mate-screenshot.py"
         self.assertIn("left_dock_ratio < 0.20", checker.read_text())
