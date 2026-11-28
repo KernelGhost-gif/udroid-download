@@ -86,6 +86,12 @@ class TermuxMateSmokeScriptTest(unittest.TestCase):
         ):
             self.assertIn(expected, self.content)
 
+    def test_mutiny_preflight_checks_the_keyfile_created_by_rootfs_setup(self):
+        self.assertIn('etc/dconf/db/local.d/00-udroid-mate-session', self.content)
+        self.assertIn('MUTINY_DCONF="$ROOTFS/etc/dconf/db/local.d/00-udroid-mate-session"', self.content)
+        self.assertIn('The PRoot dconf keyfile does not select the Mutiny panel layout', self.content)
+        self.assertIn('grep -Fq "default-layout=\'mutiny\'" "$MUTINY_DCONF"', self.content)
+
     def test_screenshot_requires_a_visible_left_side_plank_dock(self):
         checker = ROOT / ".github/scripts/check-mate-screenshot.py"
         self.assertIn("left_dock_ratio < 0.20", checker.read_text())
