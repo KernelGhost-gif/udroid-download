@@ -85,6 +85,9 @@ jobs:
             usr/share/mate-panel/layouts/mutiny.layout \
             usr/share/mate-panel/layouts/mutiny.dock \
             usr/share/plank/themes/Mutiny-dark/dock.theme \
+            root/.config/plank/dock1/launchers/firefox_firefox.dockitem \
+            root/.config/plank/dock1/launchers/caja-browser.dockitem \
+            root/.config/plank/dock1/launchers/trash.dockitem \
             usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service \
             usr/share/dbus-1/services/org.mate.panel.applet.BriskMenuFactory.service \
             usr/share/X11/xkb
