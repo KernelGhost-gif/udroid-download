@@ -239,25 +239,48 @@ test -s "$ARCHIVE"
 rm -rf "$ROOTFS"
 mkdir -p "$ROOTFS"
 run_phase "Extract Noble MATE rootfs" 600 tar -xzf "$ARCHIVE" -C "$ROOTFS"
-test -x "$ROOTFS/usr/bin/mate-session"
-test -x "$ROOTFS/usr/bin/mate-panel"
-test -x "$ROOTFS/usr/bin/marco"
-test -x "$ROOTFS/usr/bin/caja"
-test -x "$ROOTFS/usr/bin/plank"
-test -x "$ROOTFS/usr/bin/mate-tweak"
-test -s "$ROOTFS/usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png"
-test -s "$ROOTFS/usr/share/mate-panel/layouts/mutiny.layout"
-test -s "$ROOTFS/usr/share/mate-panel/layouts/mutiny.dock"
-test -s "$ROOTFS/usr/share/plank/themes/Mutiny-dark/dock.theme"
-test -s "$ROOTFS/usr/share/applications/udroid-web-browser.desktop"
-test -s "$ROOTFS/root/.config/plank/dock1/launchers/firefox_firefox.dockitem"
+require_executable() {
+  local path="$1"
+  if [ ! -x "$path" ]; then
+    log "Missing or non-executable rootfs command: ${path#"$ROOTFS"}"
+    exit 40
+  fi
+}
+require_file() {
+  local path="$1"
+  if [ ! -s "$path" ]; then
+    log "Missing or empty rootfs file: ${path#"$ROOTFS"}"
+    exit 41
+  fi
+}
+
+for command in mate-session mate-panel marco caja plank mate-tweak mate-control-center mate-terminal; do
+  require_executable "$ROOTFS/usr/bin/$command"
+done
+require_executable "$ROOTFS/usr/local/bin/udroid-mate-x11"
+for path in \
+  usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png \
+  usr/share/mate-panel/layouts/mutiny.layout \
+  usr/share/mate-panel/layouts/mutiny.dock \
+  usr/share/plank/themes/Mutiny-dark/dock.theme \
+  usr/share/applications/udroid-web-browser.desktop \
+  usr/share/applications/caja-browser.desktop \
+  usr/share/applications/matecc.desktop \
+  usr/share/applications/udroid-terminal.desktop \
+  usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override; do
+  require_file "$ROOTFS/$path"
+done
+for launcher in \
+  caja-browser clock desktop firefox_firefox mate-calc mate-system-monitor \
+  mate-terminal matecc trash; do
+  require_file "$ROOTFS/root/.config/plank/dock1/launchers/$launcher.dockitem"
+done
 if grep -Fq '/var/lib/snapd/desktop/applications/firefox_firefox.desktop' \
     "$ROOTFS/root/.config/plank/dock1/launchers/firefox_firefox.dockitem"; then
   log "The Mutiny dock still points to Firefox's unavailable Snap launcher"
   exit 27
 fi
 grep -Fq "default-layout='mutiny'" "$ROOTFS/usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override"
-test -x "$ROOTFS/usr/local/bin/udroid-mate-x11"
 
 # termux-exec rewrites absolute executable paths for Android; that behavior
 # breaks guest executable lookup in PRoot. Clear it before every guest PRoot
