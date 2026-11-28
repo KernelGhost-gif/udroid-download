@@ -101,16 +101,18 @@ command -v dconf >/dev/null 2>&1 || {
     exit 1
 }
 
-gsettings set org.mate.session required-components-list "[\"windowmanager\", \"panel\", \"filemanager\", \"dock\"]"
-gsettings set org.mate.session.required-components dock "plank"
+gsettings set org.mate.session required-components-list "[\"panel\"]"
 gsettings set org.mate.panel default-layout "mutiny"
-# Match the Mutiny Brisk Menu dash style.
+# The session manager owns the top panel. Start the remaining desktop services
+# directly: PRoot does not provide logind, and mate-session may fail to launch
+# the window-manager and dock required-components reliably.
+gsettings set org.mate.session.required-components dock "plank"
 gsettings set com.solus-project.brisk-menu window-type "dash"
 gsettings set com.solus-project.brisk-menu label-visible true
 gsettings set org.mate.interface gtk-theme "Yaru-MATE-dark"
 gsettings set org.mate.interface icon-theme "Yaru-MATE-dark"
 gsettings set org.mate.Marco.general theme "Yaru-MATE-dark"
-gsettings set org.mate.Marco.general compositing-manager true
+gsettings set org.mate.Marco.general compositing-manager false
 gsettings set org.mate.caja.desktop computer-icon-visible false
 gsettings set org.mate.caja.desktop home-icon-visible false
 gsettings set org.mate.caja.desktop trash-icon-visible false
@@ -119,12 +121,12 @@ gsettings set org.mate.background picture-filename "/usr/share/backgrounds/ubunt
 gsettings set org.mate.background picture-options "zoom"
 
 # These are the same values mate-tweak applies when selecting the Mutiny dock.
-dconf write /net/launchpad/plank/docks/dock1/alignment "\"fill\""
-dconf write /net/launchpad/plank/docks/dock1/hide-mode "\"none\""
+dconf write /net/launchpad/plank/docks/dock1/alignment "\\"fill\\""
+dconf write /net/launchpad/plank/docks/dock1/hide-mode "\\"none\\""
 dconf write /net/launchpad/plank/docks/dock1/icon-size 56
-dconf write /net/launchpad/plank/docks/dock1/items-alignment "\"start\""
-dconf write /net/launchpad/plank/docks/dock1/position "\"left\""
-dconf write /net/launchpad/plank/docks/dock1/theme "\"Mutiny-dark\""
+dconf write /net/launchpad/plank/docks/dock1/items-alignment "\\"start\\""
+dconf write /net/launchpad/plank/docks/dock1/position "\\"left\\""
+dconf write /net/launchpad/plank/docks/dock1/theme "\\"Mutiny-dark\\""
 dconf write /net/launchpad/plank/docks/dock1/zoom-enabled false
 
 panel_layout="$(gsettings get org.mate.panel default-layout)"
@@ -136,61 +138,54 @@ fi
 printf "[udroid-mate] Ubuntu MATE panel layout: %s\n" "$panel_layout"
 printf "[udroid-mate] Required dock component: %s\n" "$dock_component"
 
-mate-session "$@" &
-session_pid=$!
+wm_pid=""
+session_pid=""
+dock_pid=""
 desktop_pid=""
-fallback_dock_pid=""
-
 cleanup_session() {
-    if [[ -n "$desktop_pid" ]]; then
-        kill "$desktop_pid" 2>/dev/null || true
-    fi
-    if [[ -n "$fallback_dock_pid" ]]; then
-        kill "$fallback_dock_pid" 2>/dev/null || true
-    fi
-    kill "$session_pid" 2>/dev/null || true
-    wait "$session_pid" 2>/dev/null || true
+    for pid in "$desktop_pid" "$dock_pid" "$session_pid" "$wm_pid"; do
+        if [[ -n "$pid" ]]; then
+            kill "$pid" 2>/dev/null || true
+        fi
+    done
+    for pid in "$desktop_pid" "$dock_pid" "$session_pid" "$wm_pid"; do
+        if [[ -n "$pid" ]]; then
+            wait "$pid" 2>/dev/null || true
+        fi
+    done
 }
 trap cleanup_session EXIT INT TERM
 
-components_ready=false
-for attempt in $(seq 1 90); do
-    if ! kill -0 "$session_pid" 2>/dev/null; then
-        wait "$session_pid"
-        exit $?
+# Start Marco explicitly before the panel so the first panel frame is managed.
+marco --replace --no-composite >> "$XDG_RUNTIME_DIR/marco.log" 2>&1 &
+wm_pid=$!
+sleep 1
+
+mate-session "$@" &
+session_pid=$!
+sleep 2
+
+# These are intentionally not session-managed: only one instance of each
+# component is started, avoiding the repeated respawn loop caused by the
+# required file-manager component in some PRoot session-manager builds.
+plank >> "$XDG_RUNTIME_DIR/plank.log" 2>&1 &
+dock_pid=$!
+caja --no-default-window --force-desktop \
+    >> "$XDG_RUNTIME_DIR/caja-desktop.log" 2>&1 &
+desktop_pid=$!
+
+# Confirm that the processes launched by this wrapper remain alive. The
+# Android integration test independently checks the real process table.
+sleep 5
+for entry in "Marco:$wm_pid" "MATE-session:$session_pid" "Plank:$dock_pid" "Caja:$desktop_pid"; do
+    label="\${entry%%:*}"
+    pid="\${entry#*:}"
+    if ! kill -0 "$pid" 2>/dev/null; then
+        printf "[udroid-mate] ERROR: %s exited during startup (pid %s)\n" "$label" "$pid" >&2
+        cat "$XDG_RUNTIME_DIR/marco.log" "$XDG_RUNTIME_DIR/plank.log" "$XDG_RUNTIME_DIR/caja-desktop.log" >&2 || true
+        exit 1
     fi
-    if pgrep -x marco >/dev/null 2>&1 &&
-       pgrep -x mate-panel >/dev/null 2>&1 &&
-       pgrep -x plank >/dev/null 2>&1; then
-        components_ready=true
-        break
-    fi
-    sleep 1
 done
-
-if [[ "$components_ready" != true ]]; then
-    # Some PRoot session managers fail to resolve the dock desktop entry even
-    # though the component is configured. Start Plank directly as a fallback.
-    if ! pgrep -x plank >/dev/null 2>&1; then
-        plank >> "$XDG_RUNTIME_DIR/plank.log" 2>&1 &
-        fallback_dock_pid=$!
-    fi
-    for attempt in $(seq 1 15); do
-        if pgrep -x marco >/dev/null 2>&1 &&
-           pgrep -x mate-panel >/dev/null 2>&1 &&
-           pgrep -x plank >/dev/null 2>&1; then
-            components_ready=true
-            break
-        fi
-        sleep 1
-    done
-fi
-
-if [[ "$components_ready" != true ]]; then
-    printf "[udroid-mate] ERROR: Marco, MATE Panel, and Plank did not become ready\n" >&2
-    cat "$XDG_RUNTIME_DIR/plank.log" >&2 || true
-    exit 1
-fi
 
 panel_layout="$(gsettings get org.mate.panel default-layout)"
 dock_component="$(gsettings get org.mate.session.required-components dock)"
@@ -211,28 +206,11 @@ fi
     printf "gtk_theme=%s\n" "$gtk_theme"
     printf "icon_theme=%s\n" "$icon_theme"
     printf "background=%s\n" "$background"
-    printf "plank_process=running\n"
+    printf "marco_pid=%s\n" "$wm_pid"
+    printf "plank_pid=%s\n" "$dock_pid"
+    printf "caja_pid=%s\n" "$desktop_pid"
 } > "$XDG_RUNTIME_DIR/mate-desktop-state.txt"
 printf "[udroid-mate] Plank dock position: %s\n" "$dock_position"
-
-# Caja owns the desktop background even when all desktop icons are hidden.
-caja --no-default-window --force-desktop \
-    >> "$XDG_RUNTIME_DIR/caja-desktop.log" 2>&1 &
-desktop_pid=$!
-
-desktop_ready=false
-for attempt in $(seq 1 30); do
-    if pgrep -x caja >/dev/null 2>&1; then
-        desktop_ready=true
-        break
-    fi
-    sleep 1
-done
-if [[ "$desktop_ready" != true ]]; then
-    printf "[udroid-mate] ERROR: Caja desktop process did not stay running\n" >&2
-    cat "$XDG_RUNTIME_DIR/caja-desktop.log" >&2 || true
-    exit 1
-fi
 printf "[udroid-mate] Caja desktop is running (pid %s)\n" "$desktop_pid"
 
 # Allow Brisk Menu and Ayatana indicator factories to finish activating.
