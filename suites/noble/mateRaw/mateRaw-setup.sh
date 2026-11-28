@@ -27,6 +27,8 @@ apt-get install -y --no-install-recommends \
     mate-indicator-applet \
     mate-applet-brisk-menu \
     mate-tweak \
+    mate-control-center \
+    mate-terminal \
     plank \
     ayatana-indicator-application \
     ayatana-indicator-datetime \
@@ -80,19 +82,92 @@ Categories=Network;WebBrowser;
 StartupNotify=true
 EOF_BROWSER
 
-# Seed the same Plank launchers supplied by Ubuntu MATE. Replace only the
-# Snap browser entry; the rest of the Mutiny dock remains the upstream set.
-plank_launchers=/usr/share/ubuntu-mate/settings-overlay/config/plank/dock1/launchers
-if [ -d "$plank_launchers" ]; then
-    install -d /root/.config/plank/dock1/launchers
-    cp -a "$plank_launchers/." /root/.config/plank/dock1/launchers/
-    firefox_launcher=/root/.config/plank/dock1/launchers/firefox_firefox.dockitem
-    if [ -f "$firefox_launcher" ]; then
-        sed -i \
-            's#file:///var/lib/snapd/desktop/applications/firefox_firefox.desktop#file:///usr/share/applications/udroid-web-browser.desktop#g' \
-            "$firefox_launcher"
-    fi
-fi
+# Seed the Mutiny dock explicitly. Ubuntu's settings-overlay is normally
+# applied during an interactive first login; a root-owned PRoot image has no
+# such first-login flow, so relying on that optional overlay leaves Plank empty.
+install -d /root/.config/plank/dock1/launchers
+
+cat > /usr/share/applications/caja-browser.desktop <<'EOF_CAJA'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Files
+Comment=Browse files
+Exec=caja --no-desktop
+Icon=system-file-manager
+Terminal=false
+Categories=System;FileTools;FileManager;
+StartupNotify=true
+EOF_CAJA
+
+cat > /usr/share/applications/matecc.desktop <<'EOF_CONTROL'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Control Center
+Comment=Configure the MATE desktop
+Exec=mate-control-center
+Icon=preferences-system
+Terminal=false
+Categories=Settings;
+StartupNotify=true
+EOF_CONTROL
+
+cat > /usr/share/applications/udroid-terminal.desktop <<'EOF_TERMINAL'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Terminal
+Comment=Use the command line
+Exec=mate-terminal
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+StartupNotify=true
+EOF_TERMINAL
+
+cat > /root/.config/plank/dock1/launchers/caja-browser.dockitem <<'EOF_DOCK_CAJA'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/caja-browser.desktop
+EOF_DOCK_CAJA
+cat > /root/.config/plank/dock1/launchers/clock.dockitem <<'EOF_DOCK_CLOCK'
+[PlankDockItemPreferences]
+Launcher=docklet://clock
+
+[DockyClockPreferences]
+ShowMilitary=false
+ShowDigital=false
+ShowDate=false
+EOF_DOCK_CLOCK
+cat > /root/.config/plank/dock1/launchers/desktop.dockitem <<'EOF_DOCK_DESKTOP'
+[PlankDockItemPreferences]
+Launcher=docklet://desktop
+EOF_DOCK_DESKTOP
+cat > /root/.config/plank/dock1/launchers/firefox_firefox.dockitem <<'EOF_DOCK_BROWSER'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/udroid-web-browser.desktop
+EOF_DOCK_BROWSER
+cat > /root/.config/plank/dock1/launchers/mate-calc.dockitem <<'EOF_DOCK_CALC'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/mate-calc.desktop
+EOF_DOCK_CALC
+cat > /root/.config/plank/dock1/launchers/mate-system-monitor.dockitem <<'EOF_DOCK_MONITOR'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/mate-system-monitor.desktop
+EOF_DOCK_MONITOR
+cat > /root/.config/plank/dock1/launchers/mate-terminal.dockitem <<'EOF_DOCK_TERM'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/udroid-terminal.desktop
+EOF_DOCK_TERM
+cat > /root/.config/plank/dock1/launchers/matecc.dockitem <<'EOF_DOCK_CONTROL'
+[PlankDockItemPreferences]
+Launcher=file:///usr/share/applications/matecc.desktop
+EOF_DOCK_CONTROL
+cat > /root/.config/plank/dock1/launchers/trash.dockitem <<'EOF_DOCK_TRASH'
+[PlankDockItemPreferences]
+Launcher=docklet://trash
+EOF_DOCK_TRASH
+
 
 # Use a predictable locale in graphical applications.
 if [ -f /etc/locale.gen ]; then
