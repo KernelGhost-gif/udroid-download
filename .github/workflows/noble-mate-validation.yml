@@ -1,0 +1,140 @@
+name: Noble MATE Build Validation
+
+on:
+  push:
+    branches: [feat/noble-mate-termux-x11-20261124]
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/noble-mate-validation.yml"
+      - "build.sh"
+      - "fs-cook"
+      - ".gitmodules"
+      - "gen_data/**"
+      - "suites/noble/mateRaw/**"
+      - "tests/test_noble_mate_build.py"
+      - "tests/test_termux_mate_smoke.py"
+  workflow_dispatch:
+
+concurrency:
+  group: noble-mate-validation-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-noble-mate:
+    name: Build Ubuntu Noble MATE (ARM64)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Fetch pinned debootstrap source
+        env:
+          DEBOOTSTRAP_VERSION: 1.0.134ubuntu1
+          DEBOOTSTRAP_SHA256: e4077fc537d5edf9662305028b1ce7265ac4760086515be180b07b62d15f6a69
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/debootstrap.tar.gz"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output "$archive" \
+            "https://archive.ubuntu.com/ubuntu/pool/main/d/debootstrap/debootstrap_$DEBOOTSTRAP_VERSION.tar.gz"
+          echo "$DEBOOTSTRAP_SHA256  $archive" | sha256sum --check --strict
+          mkdir -p fs-cook/core/debootstrap
+          tar --extract --gzip --file "$archive" \
+            --directory fs-cook/core/debootstrap --strip-components=1
+          test -s fs-cook/core/debootstrap/debootstrap
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git build-essential binfmt-support qemu-user-static debootstrap util-linux
+
+      - name: Run regression tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Build Noble MATE ARM64 rootfs
+        run: script --quiet --return --command 'sudo bash build.sh -s noble -v mateRaw -a arm64' /dev/null
+
+      - name: Validate the generated rootfs
+        run: |
+          set -euo pipefail
+          archive="fs-cook/out/noble-mateRaw-arm64.tar.gz"
+          test -s "$archive"
+          gzip --test "$archive"
+          listing="$RUNNER_TEMP/noble-mate-files.txt"
+          tar -tzf "$archive" > "$listing"
+
+          for path in \
+            usr/bin/mate-session \
+            usr/bin/mate-panel \
+            usr/bin/marco \
+            usr/bin/plank \
+            usr/bin/mate-tweak \
+            usr/local/bin/udroid-mate-x11 \
+            usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png \
+            usr/share/mate-panel/layouts/mutiny.layout \
+            usr/share/mate-panel/layouts/mutiny.dock \
+            etc/dconf/db/local.d/00-udroid-mate-session \
+            usr/share/plank/themes/Mutiny-dark/dock.theme \
+            root/.config/plank/dock1/launchers/firefox_firefox.dockitem \
+            root/.config/plank/dock1/launchers/caja-browser.dockitem \
+            root/.config/plank/dock1/launchers/trash.dockitem \
+            usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service \
+            usr/share/dbus-1/services/org.mate.panel.applet.BriskMenuFactory.service \
+            usr/share/X11/xkb
+          do
+            grep -Fq "$path" "$listing" || {
+              echo "Missing required rootfs path: $path" >&2
+              exit 1
+            }
+          done
+
+          status_member="$(grep -E '(^|/)var/lib/dpkg/status$' "$listing" | head -n 1)"
+          os_release_member="$(grep -E '(^|/)usr/lib/os-release$' "$listing" | head -n 1)"
+          test -n "$status_member"
+          test -n "$os_release_member"
+          tar -xOzf "$archive" "$status_member" > "$RUNNER_TEMP/dpkg-status"
+          tar -xOzf "$archive" "$os_release_member" > "$RUNNER_TEMP/os-release"
+
+          grep -Eq '^ID="?ubuntu"?$' "$RUNNER_TEMP/os-release"
+          grep -Eq '^VERSION_CODENAME="?noble"?$' "$RUNNER_TEMP/os-release"
+
+          for package in mate-session-manager mate-panel marco caja mate-indicator-applet mate-applet-brisk-menu plank mate-tweak; do
+            awk -v package="$package" '
+              BEGIN { RS=""; FS="\n" }
+              {
+                name=""
+                state=""
+                for (i=1; i<=NF; i++) {
+                  if ($i ~ /^Package: /) {
+                    sub(/^Package: /, "", $i)
+                    name=$i
+                  }
+                  if ($i ~ /^Status: /) {
+                    sub(/^Status: /, "", $i)
+                    state=$i
+                  }
+                }
+                if (name == package && state == "install ok installed") found=1
+              }
+              END { exit(found ? 0 : 1) }
+            ' "$RUNNER_TEMP/dpkg-status" || {
+              echo "Missing installed package: $package" >&2
+              exit 1
+            }
+          done
+
+      - name: Upload Noble MATE rootfs
+        uses: actions/upload-artifact@v4.5.0
+        with:
+          name: noble-mateRaw-arm64-rootfs
+          path: fs-cook/out/noble-mateRaw-arm64.tar.gz
+          if-no-files-found: error
+          retention-days: 7

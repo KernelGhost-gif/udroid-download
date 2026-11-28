@@ -1,0 +1,190 @@
+name: Noble MATE Termux Integration
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/noble-mate-termux-smoke.yml"
+      - ".github/scripts/termux-mate-smoke.sh"
+      - ".github/scripts/check-mate-screenshot.py"
+      - ".github/scripts/termux-ci-connect-proxy.py"
+      - "build.sh"
+      - "fs-cook"
+      - ".gitmodules"
+      - "gen_data/**"
+      - "suites/noble/mateRaw/**"
+      - "tests/test_noble_mate_build.py"
+      - "tests/test_termux_mate_smoke.py"
+  workflow_dispatch:
+
+concurrency:
+  group: noble-mate-termux-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-noble-mate-amd64:
+    name: Build Noble MATE rootfs for Android x86_64 emulator
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Fetch pinned debootstrap source
+        env:
+          DEBOOTSTRAP_VERSION: 1.0.134ubuntu1
+          DEBOOTSTRAP_SHA256: e4077fc537d5edf9662305028b1ce7265ac4760086515be180b07b62d15f6a69
+        run: |
+          archive="$RUNNER_TEMP/debootstrap.tar.gz"
+          curl --fail --location \
+            --retry 5 --retry-all-errors \
+            --output "$archive" \
+            "https://archive.ubuntu.com/ubuntu/pool/main/d/debootstrap/debootstrap_$DEBOOTSTRAP_VERSION.tar.gz"
+          echo "$DEBOOTSTRAP_SHA256  $archive" | sha256sum --check --strict
+          mkdir -p fs-cook/core/debootstrap
+          tar --extract --gzip \
+            --file "$archive" \
+            --directory fs-cook/core/debootstrap \
+            --strip-components=1
+          test -s fs-cook/core/debootstrap/debootstrap
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git build-essential binfmt-support qemu-user-static debootstrap util-linux
+
+      - name: Run regression tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Build Noble MATE AMD64 rootfs
+        run: script --quiet --return --command 'sudo bash build.sh -s noble -v mateRaw -a amd64' /dev/null
+
+      - name: Validate the AMD64 rootfs
+        run: |
+          set -euo pipefail
+          archive="fs-cook/out/noble-mateRaw-amd64.tar.gz"
+          test -s "$archive"
+          gzip --test "$archive"
+          tar -tzf "$archive" > "$RUNNER_TEMP/noble-mate-amd64-files.txt"
+          for path in \
+            usr/bin/mate-session \
+            usr/bin/mate-panel \
+            usr/bin/marco \
+            usr/bin/gsettings \
+            usr/local/bin/udroid-mate-x11 \
+            usr/bin/plank \
+            usr/bin/mate-tweak \
+            usr/share/backgrounds/ubuntu-mate-hirsute/Hirsute-Hippo_WP_2560x1440_Grey.png \
+            usr/share/glib-2.0/schemas/30_ubuntu-mate.gschema.override \
+            usr/share/mate-panel/layouts/mutiny.layout \
+            usr/share/mate-panel/layouts/mutiny.dock \
+            usr/share/plank/themes/Mutiny-dark/dock.theme \
+            root/.config/plank/dock1/launchers/firefox_firefox.dockitem \
+            root/.config/plank/dock1/launchers/caja-browser.dockitem \
+            root/.config/plank/dock1/launchers/trash.dockitem \
+            usr/share/dbus-1/services/org.mate.panel.applet.IndicatorAppletCompleteFactory.service \
+            usr/share/dbus-1/services/org.mate.panel.applet.BriskMenuFactory.service \
+            usr/share/X11/xkb
+          do
+            grep -Eq "(^|/)$path(/|$)" "$RUNNER_TEMP/noble-mate-amd64-files.txt"
+          done
+
+      - name: Upload AMD64 rootfs for Android test
+        uses: actions/upload-artifact@v4
+        with:
+          name: noble-mateRaw-amd64-rootfs
+          path: fs-cook/out/noble-mateRaw-amd64.tar.gz
+          if-no-files-found: error
+          retention-days: 3
+
+  termux-android-emulator:
+    name: Run MATE in Termux PRoot and Termux:X11
+    needs: build-noble-mate-amd64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout smoke-test scripts
+        uses: actions/checkout@v4
+
+      - name: Install screenshot validation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-pil
+
+      - name: Download AMD64 MATE rootfs
+        uses: actions/download-artifact@v4
+        with:
+          name: noble-mateRaw-amd64-rootfs
+          path: fs-cook/out
+
+      - name: Verify rootfs artifact
+        run: |
+          set -euo pipefail
+          test -s fs-cook/out/noble-mateRaw-amd64.tar.gz
+          gzip --test fs-cook/out/noble-mateRaw-amd64.tar.gz
+          sha256sum fs-cook/out/noble-mateRaw-amd64.tar.gz
+
+      - name: Download official Termux and Termux:X11 APKs
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/termux-mate-apks"
+          mkdir -p "$out"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            --output "$out/termux.apk" \
+            "https://github.com/termux/termux-app/releases/download/v0.119.0-beta.3/termux-app_v0.119.0-beta.3%2Bapt-android-7-github-debug_x86_64.apk"
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 20 --max-time 300 \
+            --output "$out/termux-x11.apk" \
+            "https://github.com/termux/termux-x11/releases/download/nightly/termux-x11-universal-release.apk"
+          test -s "$out/termux.apk"
+          test -s "$out/termux-x11.apk"
+          sha256sum "$out/termux.apk" "$out/termux-x11.apk"
+
+      - name: Enable KVM for Android emulator
+        run: |
+          set -euo pipefail
+          if [ -e /dev/kvm ]; then
+            echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+              | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+            sudo udevadm control --reload-rules
+            sudo udevadm trigger --name-match=kvm
+          fi
+
+          if [ -r /dev/kvm ] && [ -w /dev/kvm ]; then
+            echo "KVM is available; Android emulator will use hardware acceleration"
+          else
+            echo "KVM is unavailable; Android emulator will fall back to TCG"
+            echo "ANDROID_I_WANT_MY_TCG=yes" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install Termux, start Android, and launch MATE through Termux:X11
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          profile: pixel_5
+          cores: 4
+          ram-size: 4096M
+          heap-size: 512M
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -netfast -gpu swiftshader_indirect -camera-back none
+          disable-animations: true
+          emulator-boot-timeout: 1200
+          disable-linux-hw-accel: auto
+          script: bash .github/scripts/termux-mate-smoke.sh
+
+      - name: Upload Termux, X11, MATE logs and emulator screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noble-mate-termux-smoke-diagnostics
+          path: ${{ runner.temp }}/termux-mate-smoke/
+          if-no-files-found: ignore
+          retention-days: 7
