@@ -290,7 +290,8 @@ do_unmount() { :; }
                     "exit 0\n"
                 ),
                 "plank": "#!/bin/sh\nsleep 12\n",
-                "pgrep": "#!/bin/sh\nexit 0\n",\n                "marco": "#!/bin/sh\nsleep 12\n",
+                "pgrep": "#!/bin/sh\nexit 0\n",
+                "marco": "#!/bin/sh\nsleep 12\n",
                 "caja": (
                     "#!/bin/sh\n"
                     f"printf '%s\\n' \"$*\" > '{caja_started}'\n"
