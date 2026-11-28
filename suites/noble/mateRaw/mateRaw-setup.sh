@@ -177,10 +177,14 @@ locale-gen en_US.UTF-8
 update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 # Seed conventional user directories and MATE defaults for the rootfs user.
-install -d /root/Desktop /root/Downloads /root/Documents /root/Pictures \
-    /root/Music /root/Videos
+# xdg-user-dirs writes its configuration below ~/.config; create that path
+# explicitly because the image has no interactive first-login setup.
+install -d /root/.config /root/Desktop /root/Downloads /root/Documents \
+    /root/Pictures /root/Music /root/Videos
 if command -v xdg-user-dirs-update >/dev/null 2>&1; then
-    HOME=/root xdg-user-dirs-update
+    if ! HOME=/root XDG_CONFIG_HOME=/root/.config xdg-user-dirs-update; then
+        echo "[udroid-mate] WARNING: could not update user directories; continuing with the pre-created directories" >&2
+    fi
 fi
 
 install -d /etc/dconf/profile /etc/dconf/db/local.d
